@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block title %}{{ 'Edit' if book else 'Add' }} Book — Library Management System{% endblock %}
+{% block content %}
+
+<h1 class="page-title">{{ 'Edit Book' if book else 'Add Book' }}</h1>
+
+<form class="form-panel" method="post">
+  <label>Title
+    <input type="text" name="title" required value="{{ book.title if book else '' }}">
+  </label>
+  <label>Author
+    <input type="text" name="author" required value="{{ book.author if book else '' }}">
+  </label>
+  <div class="field-row">
+    <label>ISBN
+      <input type="text" name="isbn" value="{{ book.isbn if book else '' }}">
+    </label>
+    <label>Category
+      <input type="text" name="category" placeholder="General" value="{{ book.category if book else '' }}">
+    </label>
+  </div>
+  <label>Total Copies
+    <input type="number" name="total_copies" min="1" value="{{ book.total_copies if book else 1 }}">
+  </label>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">{{ 'Save Changes' if book else 'Add Book' }}</button>
+    <a href="{{ url_for('books') }}" class="btn btn-ghost">Cancel</a>
+  </div>
+</form>
+
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — Library Management System{% endblock %}
+{% block content %}
+
+<h1 class="page-title">Dashboard</h1>
+
+<div class="stat-grid">
+  <div class="stat-card">
+    <span class="stat-value">{{ stats.total_titles }}</span>
+    <span class="stat-label">Book Titles</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-value">{{ stats.total_books }}</span>
+    <span class="stat-label">Total Copies</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-value">{{ stats.total_members }}</span>
+    <span class="stat-label">Members</span>
+  </div>
+  <div class="stat-card">
+    <span class="stat-value">{{ stats.borrowed_now }}</span>
+    <span class="stat-label">Currently Borrowed</span>
+  </div>
+  <div class="stat-card {{ 'stat-warn' if stats.overdue_now }}">
+    <span class="stat-value">{{ stats.overdue_now }}</span>
+    <span class="stat-label">Overdue</span>
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <h2>Currently Borrowed</h2>
+    <a href="{{ url_for('loans') }}" class="btn btn-small btn-ghost">View all loans →</a>
+  </div>
+  {% if recent_loans %}
+  <table class="data-table">
+    <thead>
+      <tr><th>Book</th><th>Member</th><th>Borrowed</th><th>Due</th></tr>
+    </thead>
+    <tbody>
+      {% for loan in recent_loans %}
+      <tr class="{{ 'row-overdue' if loan.due_date < today }}">
+        <td>{{ loan.book_title }}</td>
+        <td>{{ loan.member_name }}</td>
+        <td>{{ loan.borrow_date }}</td>
+        <td>{{ loan.due_date }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state">No books currently on loan.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

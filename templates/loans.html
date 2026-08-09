@@ -1,0 +1,74 @@
+{% extends 'base.html' %}
+{% block title %}Loans — Library Management System{% endblock %}
+{% block content %}
+
+<div class="page-header">
+  <h1 class="page-title">Loans</h1>
+</div>
+
+<div class="panel form-panel">
+  <h2>Borrow a Book</h2>
+  <form method="post" action="{{ url_for('borrow') }}" class="field-row">
+    <label>Book
+      <select name="book_id" required>
+        {% for book in books %}
+          <option value="{{ book.id }}" {{ 'disabled' if book.available_copies == 0 }}>
+            {{ book.title }} ({{ book.available_copies }} available)
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Member
+      <select name="member_id" required>
+        {% for member in members %}
+          <option value="{{ member.id }}">{{ member.name }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="btn btn-primary">Borrow</button>
+  </form>
+</div>
+
+<div class="filters">
+  <a href="{{ url_for('loans') }}" class="filter-btn {{ 'active' if not status }}">All</a>
+  <a href="{{ url_for('loans', status='borrowed') }}" class="filter-btn {{ 'active' if status == 'borrowed' }}">Borrowed</a>
+  <a href="{{ url_for('loans', status='returned') }}" class="filter-btn {{ 'active' if status == 'returned' }}">Returned</a>
+</div>
+
+{% if loans %}
+<table class="data-table">
+  <thead>
+    <tr><th>Book</th><th>Member</th><th>Borrowed</th><th>Due</th><th>Status</th><th></th></tr>
+  </thead>
+  <tbody>
+    {% for loan in loans %}
+    <tr class="{{ 'row-overdue' if loan.status == 'borrowed' and loan.due_date < today }}">
+      <td>{{ loan.book_title }}</td>
+      <td>{{ loan.member_name }}</td>
+      <td>{{ loan.borrow_date }}</td>
+      <td>{{ loan.due_date }}</td>
+      <td>
+        {% if loan.status == 'returned' %}
+          <span class="badge badge-success">Returned {{ loan.return_date }}</span>
+        {% elif loan.due_date < today %}
+          <span class="badge badge-danger">Overdue</span>
+        {% else %}
+          <span class="badge">Borrowed</span>
+        {% endif %}
+      </td>
+      <td class="actions">
+        {% if loan.status == 'borrowed' %}
+        <form method="post" action="{{ url_for('return_loan', loan_id=loan.id) }}">
+          <button type="submit" class="icon-btn">Mark Returned</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty-state">No loans found.</p>
+{% endif %}
+
+{% endblock %}
