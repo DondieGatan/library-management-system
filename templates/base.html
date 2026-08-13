@@ -20,12 +20,14 @@
   {% if current_username %}
     <div class="nav-links">
       <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' }}">Dashboard</a>
-      <a href="{{ url_for('books') }}" class="{{ 'active' if request.endpoint in ['books','add_book','edit_book'] }}">Books</a>
+      <a href="{{ url_for('books') }}" class="{{ 'active' if request.endpoint in ['books','add_book','edit_book','book_detail'] }}">Books</a>
+      {% if current_role == 'admin' %}
       <a href="{{ url_for('members') }}" class="{{ 'active' if request.endpoint in ['members','add_member','edit_member'] }}">Members</a>
       <a href="{{ url_for('loans') }}" class="{{ 'active' if request.endpoint == 'loans' }}">Loans</a>
+      {% endif %}
     </div>
     <div class="nav-user">
-      <span class="nav-username">{{ current_username }}</span>
+      <span class="nav-username">{{ current_username }}{% if current_role == 'admin' %}<span class="role-badge">Admin</span>{% endif %}</span>
       <form method="post" action="{{ url_for('logout') }}">
         <button type="submit" class="btn btn-ghost btn-small">Log Out</button>
       </form>
@@ -41,9 +43,9 @@
 <main class="container">
   {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
-      <div class="flash-stack">
+      <div class="toast-stack">
         {% for category, message in messages %}
-          <div class="flash flash-{{ category }}">{{ message }}</div>
+          <div class="toast toast-{{ category }}">{{ message }}</div>
         {% endfor %}
       </div>
     {% endif %}

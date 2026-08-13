@@ -44,6 +44,29 @@
 
 <div class="panel">
   <div class="panel-header">
+    <h2>Books by Category</h2>
+  </div>
+  {% if category_counts %}
+  <form method="get" class="category-picker">
+    <select name="category" onchange="this.form.submit()">
+      {% for c in category_counts %}
+      <option value="{{ c.category }}" {{ 'selected' if c.category == selected_category }}>{{ c.category }}</option>
+      {% endfor %}
+    </select>
+    <noscript><button type="submit" class="btn btn-ghost btn-small">View</button></noscript>
+    <div class="category-count">
+      <span class="category-count-value">{{ selected_count }}</span>
+      <span class="category-count-label">{{ 'book' if selected_count == 1 else 'books' }}</span>
+    </div>
+  </form>
+  {% else %}
+  <p class="empty-state-inline">No books yet.</p>
+  {% endif %}
+</div>
+
+{% if current_role == 'admin' %}
+<div class="panel">
+  <div class="panel-header">
     <h2>Currently Borrowed</h2>
     <a href="{{ url_for('loans') }}" class="btn btn-small btn-ghost">View all loans →</a>
   </div>
@@ -73,8 +96,9 @@
     </tbody>
   </table>
   {% else %}
-  <p class="empty-state">No books currently on loan.</p>
+  <p class="empty-state-inline">No books currently on loan.</p>
   {% endif %}
 </div>
+{% endif %}
 
 {% endblock %}

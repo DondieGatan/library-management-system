@@ -1,0 +1,80 @@
+{% extends 'base.html' %}
+{% block title %}{{ book.title }} — Library Management System{% endblock %}
+{% block content %}
+
+<a href="{{ url_for('books') }}" class="back-link">← Back to Books</a>
+
+<div class="book-detail">
+  <div class="book-detail-cover">
+    {% if book.cover_url %}
+      <img src="{{ book.cover_url }}" alt="{{ book.title }} cover">
+    {% else %}
+      <span class="book-cover-placeholder book-detail-cover-placeholder">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      </span>
+    {% endif %}
+  </div>
+
+  <div class="book-detail-info">
+    <h1 class="page-title">{{ book.title }}</h1>
+    <p class="book-detail-author">by {{ book.author }}</p>
+
+    <div class="book-detail-meta">
+      <span class="badge">{{ book.category }}</span>
+      <span class="badge {{ 'badge-danger' if book.available_copies == 0 else 'badge-success' }}">
+        {{ book.available_copies }} / {{ book.total_copies }} available
+      </span>
+    </div>
+
+    <dl class="book-detail-facts">
+      <dt>ISBN</dt>
+      <dd>{{ book.isbn or '—' }}</dd>
+      <dt>Total copies</dt>
+      <dd>{{ book.total_copies }}</dd>
+    </dl>
+
+    {% if current_role == 'admin' %}
+    <div class="form-actions">
+      <a href="{{ url_for('edit_book', book_id=book.id) }}" class="btn btn-ghost">Edit Book</a>
+      <form method="post" action="{{ url_for('delete_book', book_id=book.id) }}" onsubmit="return confirm('Delete this book?');">
+        <button type="submit" class="btn btn-ghost delete">Delete Book</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="panel">
+  <div class="panel-header">
+    <h2>Loan History</h2>
+  </div>
+  {% if loan_history %}
+  <table class="data-table">
+    <thead>
+      <tr><th>Member</th><th>Borrowed</th><th>Due</th><th>Status</th></tr>
+    </thead>
+    <tbody>
+      {% for loan in loan_history %}
+      <tr class="{{ 'row-overdue' if loan.status == 'borrowed' and loan.due_date < today }}">
+        <td>{{ loan.member_name }}</td>
+        <td>{{ loan.borrow_date }}</td>
+        <td>{{ loan.due_date }}</td>
+        <td>
+          {% if loan.status == 'returned' %}
+            <span class="badge badge-success">Returned {{ loan.return_date }}</span>
+          {% elif loan.due_date < today %}
+            <span class="badge badge-danger">Overdue</span>
+          {% else %}
+            <span class="badge">Borrowed</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="empty-state-inline">This book has never been borrowed.</p>
+  {% endif %}
+</div>
+
+{% endblock %}

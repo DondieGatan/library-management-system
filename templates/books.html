@@ -4,7 +4,12 @@
 
 <div class="page-header">
   <h1 class="page-title">Books</h1>
-  <a href="{{ url_for('add_book') }}" class="btn btn-primary">+ Add Book</a>
+  <div class="header-actions">
+    <a href="{{ url_for('export_books_csv') }}" class="btn btn-ghost">Export CSV</a>
+    {% if current_role == 'admin' %}
+    <a href="{{ url_for('add_book') }}" class="btn btn-primary">+ Add Book</a>
+    {% endif %}
+  </div>
 </div>
 
 <form class="search-bar" method="get">
@@ -21,14 +26,16 @@
     {% for book in books %}
     <tr>
       <td class="book-cell">
-        {% if book.cover_url %}
-          <img src="{{ book.cover_url }}" alt="{{ book.title }} cover" class="book-cover">
-        {% else %}
-          <span class="book-cover book-cover-placeholder">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-          </span>
-        {% endif %}
-        <span class="book-cell-title">{{ book.title }}</span>
+        <a href="{{ url_for('book_detail', book_id=book.id) }}" class="book-cell-link">
+          {% if book.cover_url %}
+            <img src="{{ book.cover_url }}" alt="{{ book.title }} cover" class="book-cover">
+          {% else %}
+            <span class="book-cover book-cover-placeholder">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+            </span>
+          {% endif %}
+          <span class="book-cell-title">{{ book.title }}</span>
+        </a>
       </td>
       <td>{{ book.author }}</td>
       <td><span class="badge">{{ book.category }}</span></td>
@@ -39,17 +46,31 @@
         </span>
       </td>
       <td class="actions">
+        {% if current_role == 'admin' %}
         <a href="{{ url_for('edit_book', book_id=book.id) }}" class="icon-btn">Edit</a>
         <form method="post" action="{{ url_for('delete_book', book_id=book.id) }}" onsubmit="return confirm('Delete this book?');">
           <button type="submit" class="icon-btn delete">Delete</button>
         </form>
+        {% endif %}
       </td>
     </tr>
     {% endfor %}
   </tbody>
 </table>
+
+{% if total_pages > 1 %}
+<nav class="pagination">
+  <a href="{{ url_for('books', q=search, page=page-1) }}" class="btn btn-ghost btn-small {{ 'disabled' if page <= 1 }}">← Prev</a>
+  <span class="pagination-status">Page {{ page }} of {{ total_pages }} &middot; {{ total }} books</span>
+  <a href="{{ url_for('books', q=search, page=page+1) }}" class="btn btn-ghost btn-small {{ 'disabled' if page >= total_pages }}">Next →</a>
+</nav>
+{% endif %}
+
 {% else %}
-<p class="empty-state">No books found.</p>
+<div class="empty-state">
+  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+  <p>{{ 'No books match your search.' if search else 'No books yet — add your first one to get started.' }}</p>
+</div>
 {% endif %}
 
 {% endblock %}

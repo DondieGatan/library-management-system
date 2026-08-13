@@ -4,6 +4,7 @@
 
 <div class="page-header">
   <h1 class="page-title">Loans</h1>
+  <a href="{{ url_for('export_loans_csv') }}" class="btn btn-ghost">Export CSV</a>
 </div>
 
 <div class="panel form-panel">
@@ -29,10 +30,17 @@
   </form>
 </div>
 
+<form class="search-bar" method="get">
+  <input type="hidden" name="status" value="{{ status or '' }}">
+  <input type="text" name="q" value="{{ search }}" placeholder="Search by book title or member name…">
+  <button type="submit" class="btn btn-ghost">Search</button>
+</form>
+
 <div class="filters">
-  <a href="{{ url_for('loans') }}" class="filter-btn {{ 'active' if not status }}">All</a>
-  <a href="{{ url_for('loans', status='borrowed') }}" class="filter-btn {{ 'active' if status == 'borrowed' }}">Borrowed</a>
-  <a href="{{ url_for('loans', status='returned') }}" class="filter-btn {{ 'active' if status == 'returned' }}">Returned</a>
+  <a href="{{ url_for('loans', q=search) }}" class="filter-btn {{ 'active' if not status }}">All</a>
+  <a href="{{ url_for('loans', status='borrowed', q=search) }}" class="filter-btn {{ 'active' if status == 'borrowed' }}">Borrowed</a>
+  <a href="{{ url_for('loans', status='overdue', q=search) }}" class="filter-btn {{ 'active' if status == 'overdue' }}">Overdue</a>
+  <a href="{{ url_for('loans', status='returned', q=search) }}" class="filter-btn {{ 'active' if status == 'returned' }}">Returned</a>
 </div>
 
 {% if loans %}
@@ -77,7 +85,10 @@
   </tbody>
 </table>
 {% else %}
-<p class="empty-state">No loans found.</p>
+<div class="empty-state">
+  <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v20M2 12h20"/></svg>
+  <p>{{ 'No loans match your search.' if search else 'No loans found for this filter.' }}</p>
+</div>
 {% endif %}
 
 {% endblock %}

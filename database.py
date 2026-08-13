@@ -60,6 +60,14 @@ def init_db():
         conn.execute('ALTER TABLE books ADD COLUMN cover_url TEXT')
     except sqlite3.OperationalError:
         pass
+    # Migration for tables created before roles existed. Defaults to
+    # 'admin' so accounts registered before this feature keep the full
+    # access they already had; create_user() passes 'member' explicitly
+    # for every signup from here on.
+    try:
+        conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'")
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
@@ -68,17 +76,23 @@ def init_db():
 # Books
 # --------------------------------------------------------------------------
 
-def get_books(search=''):
+def get_books(search='', page=None, per_page=10):
     conn = get_connection()
-    if search:
-        like = f'%{search}%'
-        rows = conn.execute(
-            'SELECT * FROM books WHERE title LIKE ? OR author LIKE ? OR category LIKE ? ORDER BY title',
-            (like, like, like)
-        ).fetchall()
-    else:
-        rows = conn.execute('SELECT * FROM books ORDER BY title').fetchall()
+    like = f'%{search}%'
+    where = 'WHERE title LIKE ? OR author LIKE ? OR category LIKE ?' if search else ''
+    params = (like, like, like) if search else ()
+
+    total = conn.execute(f'SELECT COUNT(*) AS n FROM books {where}', params).fetchone()['n']
+
+    query = f'SELECT * FROM books {where} ORDER BY title'
+    if page is not None:
+        query += ' LIMIT ? OFFSET ?'
+        params = params + (per_page, (page - 1) * per_page)
+    rows = conn.execute(query, params).fetchall()
     conn.close()
+
+    if page is not None:
+        return rows, total
     return rows
 
 
@@ -177,7 +191,7 @@ def delete_member(member_id):
 # Loans (borrow / return)
 # --------------------------------------------------------------------------
 
-def get_loans(status=None):
+def get_loans(status=None, search=''):
     conn = get_connection()
     query = '''
         SELECT loans.*, books.title AS book_title, books.isbn AS book_isbn,
@@ -187,12 +201,44 @@ def get_loans(status=None):
         JOIN books ON books.id = loans.book_id
         JOIN members ON members.id = loans.member_id
     '''
-    params = ()
-    if status:
-        query += ' WHERE loans.status = ?'
-        params = (status,)
+    conditions = []
+    params = []
+    if status == 'overdue':
+        conditions.append("loans.status = 'borrowed' AND loans.due_date < ?")
+        params.append(date.today().isoformat())
+    elif status:
+        conditions.append('loans.status = ?')
+        params.append(status)
+    if search:
+        conditions.append('(books.title LIKE ? OR members.name LIKE ?)')
+        like = f'%{search}%'
+        params.extend([like, like])
+    if conditions:
+        query += ' WHERE ' + ' AND '.join(conditions)
     query += ' ORDER BY loans.borrow_date DESC'
     rows = conn.execute(query, params).fetchall()
+    conn.close()
+    return rows
+
+
+def get_book_loans(book_id):
+    conn = get_connection()
+    rows = conn.execute('''
+        SELECT loans.*, members.name AS member_name
+        FROM loans
+        JOIN members ON members.id = loans.member_id
+        WHERE loans.book_id = ?
+        ORDER BY loans.borrow_date DESC
+    ''', (book_id,)).fetchall()
+    conn.close()
+    return rows
+
+
+def get_books_by_category():
+    conn = get_connection()
+    rows = conn.execute(
+        'SELECT category, COUNT(*) AS n FROM books GROUP BY category ORDER BY n DESC'
+    ).fetchall()
     conn.close()
     return rows
 
@@ -275,11 +321,11 @@ def get_user_by_id(user_id):
     return row
 
 
-def create_user(username, password_hash):
+def create_user(username, password_hash, role='member'):
     conn = get_connection()
     conn.execute(
-        'INSERT INTO users (username, password_hash) VALUES (?, ?)',
-        (username, password_hash)
+        'INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
+        (username, password_hash, role)
     )
     conn.commit()
     conn.close()
