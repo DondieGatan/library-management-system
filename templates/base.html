@@ -5,11 +5,18 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}Library Management System{% endblock %}</title>
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><rect width=%2224%22 height=%2224%22 rx=%226%22 fill=%22%234f8cf0%22/><path d=%22M6 6.5c0-.5.4-1 1-1h4.5V18H7c-.6 0-1-.4-1-1z%22 fill=%22white%22 opacity=%22.9%22/><path d=%22M18 6.5c0-.5-.4-1-1-1h-4.5V18H17c.6 0 1-.4 1-1z%22 fill=%22white%22 opacity=%22.65%22/></svg>">
 </head>
 <body>
 
 <nav class="navbar">
-  <a href="{{ url_for('dashboard') if current_username else url_for('login') }}" class="brand">📚 LibrarySys</a>
+  <a href="{{ url_for('dashboard') if current_username else url_for('login') }}" class="brand">
+    <svg class="brand-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <path d="M4 5.5C4 4.67 4.67 4 5.5 4H11.5V20H5.5C4.67 20 4 19.33 4 18.5V5.5Z" fill="currentColor" opacity="0.9"/>
+      <path d="M20 5.5C20 4.67 19.33 4 18.5 4H12.5V20H18.5C19.33 20 20 19.33 20 18.5V5.5Z" fill="currentColor" opacity="0.55"/>
+    </svg>
+    LibrarySys
+  </a>
   {% if current_username %}
     <div class="nav-links">
       <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' }}">Dashboard</a>
