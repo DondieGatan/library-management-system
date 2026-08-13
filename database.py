@@ -51,6 +51,15 @@ def init_db():
             created_at    TEXT NOT NULL DEFAULT (date('now'))
         );
     ''')
+    # Migration for tables created before cover_url existed. NULL means
+    # "never looked up yet"; '' means "looked up, no cover found" -- both
+    # distinct from an actual URL, so we only ever resolve each book once.
+    # try/except rather than "ADD COLUMN IF NOT EXISTS" for portability
+    # across older SQLite builds.
+    try:
+        conn.execute('ALTER TABLE books ADD COLUMN cover_url TEXT')
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
@@ -96,9 +105,18 @@ def update_book(book_id, title, author, isbn, category, total_copies):
     borrowed_out = current['total_copies'] - current['available_copies']
     new_available = max(total_copies - borrowed_out, 0)
     conn.execute(
-        'UPDATE books SET title=?, author=?, isbn=?, category=?, total_copies=?, available_copies=? WHERE id=?',
+        # cover_url reset to NULL so a changed title/author/isbn gets its
+        # cover re-resolved instead of keeping a stale one.
+        'UPDATE books SET title=?, author=?, isbn=?, category=?, total_copies=?, available_copies=?, cover_url=NULL WHERE id=?',
         (title, author, isbn, category, total_copies, new_available, book_id)
     )
+    conn.commit()
+    conn.close()
+
+
+def update_book_cover(book_id, cover_url):
+    conn = get_connection()
+    conn.execute('UPDATE books SET cover_url = ? WHERE id = ?', (cover_url, book_id))
     conn.commit()
     conn.close()
 
@@ -162,7 +180,9 @@ def delete_member(member_id):
 def get_loans(status=None):
     conn = get_connection()
     query = '''
-        SELECT loans.*, books.title AS book_title, members.name AS member_name
+        SELECT loans.*, books.title AS book_title, books.isbn AS book_isbn,
+               books.author AS book_author, books.cover_url AS book_cover_url,
+               members.name AS member_name
         FROM loans
         JOIN books ON books.id = loans.book_id
         JOIN members ON members.id = loans.member_id

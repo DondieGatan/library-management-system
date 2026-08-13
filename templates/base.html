@@ -12,10 +12,10 @@
 <nav class="navbar">
   <a href="{{ url_for('dashboard') if current_username else url_for('login') }}" class="brand">
     <svg class="brand-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-      <path d="M4 5.5C4 4.67 4.67 4 5.5 4H11.5V20H5.5C4.67 20 4 19.33 4 18.5V5.5Z" fill="currentColor" opacity="0.9"/>
-      <path d="M20 5.5C20 4.67 19.33 4 18.5 4H12.5V20H18.5C19.33 20 20 19.33 20 18.5V5.5Z" fill="currentColor" opacity="0.55"/>
+      <path class="brand-icon-left" d="M4 5.5C4 4.67 4.67 4 5.5 4H11.5V20H5.5C4.67 20 4 19.33 4 18.5V5.5Z" fill="currentColor" opacity="0.9"/>
+      <path class="brand-icon-right" d="M20 5.5C20 4.67 19.33 4 18.5 4H12.5V20H18.5C19.33 20 20 19.33 20 18.5V5.5Z" fill="currentColor" opacity="0.55"/>
     </svg>
-    LibrarySys
+    Library Management System
   </a>
   {% if current_username %}
     <div class="nav-links">

@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}Library Management System{% endblock %}</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><rect width=%2224%22 height=%2224%22 rx=%226%22 fill=%22%233a2a17%22/><path d=%22M6 6.5c0-.5.4-1 1-1h4.5V18H7c-.6 0-1-.4-1-1z%22 fill=%22%23d1a054%22/><path d=%22M18 6.5c0-.5-.4-1-1-1h-4.5V18H17c.6 0 1-.4 1-1z%22 fill=%22%239c4a3c%22/></svg>">
+</head>
+<body class="auth-body">
+
+<div class="auth-split">
+  <div class="auth-form-col">
+    <a href="{{ url_for('login') }}" class="brand auth-brand">
+      <svg class="brand-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M4 5.5C4 4.67 4.67 4 5.5 4H11.5V20H5.5C4.67 20 4 19.33 4 18.5V5.5Z" fill="currentColor" opacity="0.9"/>
+        <path d="M20 5.5C20 4.67 19.33 4 18.5 4H12.5V20H18.5C19.33 20 20 19.33 20 18.5V5.5Z" fill="currentColor" opacity="0.55"/>
+      </svg>
+      Library Management System
+    </a>
+
+    <div class="auth-form-wrap">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-stack">
+            {% for category, message in messages %}
+              <div class="flash flash-{{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+
+      {% block content %}{% endblock %}
+    </div>
+
+    <p class="auth-footnote">Library Management System &copy; 2026 &mdash; Dondie Godwin Gatan</p>
+  </div>
+
+  <div class="auth-image-col"></div>
+</div>
+
+</body>
+</html>

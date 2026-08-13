@@ -20,7 +20,16 @@
   <tbody>
     {% for book in books %}
     <tr>
-      <td>{{ book.title }}</td>
+      <td class="book-cell">
+        {% if book.cover_url %}
+          <img src="{{ book.cover_url }}" alt="{{ book.title }} cover" class="book-cover">
+        {% else %}
+          <span class="book-cover book-cover-placeholder">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          </span>
+        {% endif %}
+        <span class="book-cell-title">{{ book.title }}</span>
+      </td>
       <td>{{ book.author }}</td>
       <td><span class="badge">{{ book.category }}</span></td>
       <td>{{ book.isbn or '—' }}</td>

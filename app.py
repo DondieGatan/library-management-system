@@ -1,8 +1,12 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from functools import wraps
 from flask import Flask, render_template, request, redirect, url_for, flash, session
 from werkzeug.security import generate_password_hash, check_password_hash
 import database as db
+import covers
+
+COVER_POOL = ThreadPoolExecutor(max_workers=8)
 
 app = Flask(__name__)
 app.secret_key = 'library-management-system-dev-key'
@@ -18,6 +22,32 @@ def login_required(view):
             return redirect(url_for('login', next=request.path))
         return view(*args, **kwargs)
     return wrapped
+
+
+def _resolve_missing_covers(rows, id_key, isbn_key, title_key, author_key, url_key):
+    """Shared helper for with_book_covers/with_loan_covers. Looks up every
+    row missing a cover concurrently (these are independent, slow network
+    calls -- doing them one at a time made a page with many uncached books
+    take minutes to load) then caches each result on the book row."""
+    result = [dict(row) for row in rows]
+    pending = [r for r in result if r.get(url_key) is None]
+    if pending:
+        urls = COVER_POOL.map(
+            lambda r: covers.resolve_cover_url(r.get(isbn_key), r[title_key], r.get(author_key)),
+            pending,
+        )
+        for r, url in zip(pending, urls):
+            db.update_book_cover(r[id_key], url or '')
+            r[url_key] = url or ''
+    return result
+
+
+def with_book_covers(books):
+    return _resolve_missing_covers(books, 'id', 'isbn', 'title', 'author', 'cover_url')
+
+
+def with_loan_covers(loans):
+    return _resolve_missing_covers(loans, 'book_id', 'book_isbn', 'book_title', 'book_author', 'book_cover_url')
 
 
 @app.context_processor
@@ -82,7 +112,7 @@ def logout():
 @login_required
 def dashboard():
     stats = db.get_stats()
-    recent_loans = db.get_loans(status='borrowed')[:5]
+    recent_loans = with_loan_covers(db.get_loans(status='borrowed')[:5])
     return render_template('dashboard.html', stats=stats, recent_loans=recent_loans)
 
 
@@ -94,7 +124,7 @@ def dashboard():
 @login_required
 def books():
     search = request.args.get('q', '')
-    return render_template('books.html', books=db.get_books(search), search=search)
+    return render_template('books.html', books=with_book_covers(db.get_books(search)), search=search)
 
 
 @app.route('/books/add', methods=['GET', 'POST'])
@@ -204,7 +234,7 @@ def loans():
     status = request.args.get('status')
     return render_template(
         'loans.html',
-        loans=db.get_loans(status),
+        loans=with_loan_covers(db.get_loans(status)),
         status=status,
         books=db.get_books(),
         members=db.get_members(),

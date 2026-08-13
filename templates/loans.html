@@ -43,7 +43,16 @@
   <tbody>
     {% for loan in loans %}
     <tr class="{{ 'row-overdue' if loan.status == 'borrowed' and loan.due_date < today }}">
-      <td>{{ loan.book_title }}</td>
+      <td class="book-cell">
+        {% if loan.book_cover_url %}
+          <img src="{{ loan.book_cover_url }}" alt="{{ loan.book_title }} cover" class="book-cover">
+        {% else %}
+          <span class="book-cover book-cover-placeholder">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          </span>
+        {% endif %}
+        <span class="book-cell-title">{{ loan.book_title }}</span>
+      </td>
       <td>{{ loan.member_name }}</td>
       <td>{{ loan.borrow_date }}</td>
       <td>{{ loan.due_date }}</td>
