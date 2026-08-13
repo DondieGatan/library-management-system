@@ -1,10 +1,12 @@
 import csv
 import io
+import logging
 import os
 import secrets
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from functools import wraps
+from typing import Any, Callable
 from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, flash, session, Response
 from flask_limiter import Limiter
@@ -15,6 +17,9 @@ import database as db
 import covers
 
 load_dotenv()
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
+logger = logging.getLogger('library')
 
 COVER_POOL = ThreadPoolExecutor(max_workers=8)
 
@@ -33,7 +38,7 @@ limiter = Limiter(get_remote_address, app=app, default_limits=[])
 db.init_db()
 
 
-def login_required(view):
+def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(view)
     def wrapped(*args, **kwargs):
         if 'user_id' not in session:
@@ -43,7 +48,7 @@ def login_required(view):
     return wrapped
 
 
-def admin_required(view):
+def admin_required(view: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(view)
     def wrapped(*args, **kwargs):
         if session.get('role') != 'admin':
@@ -53,12 +58,14 @@ def admin_required(view):
     return wrapped
 
 
-def home_url():
+def home_url() -> str:
     """Members have no Dashboard, so their landing page is Books instead."""
     return url_for('dashboard') if session.get('role') == 'admin' else url_for('books')
 
 
-def _resolve_missing_covers(rows, id_key, isbn_key, title_key, author_key, url_key):
+def _resolve_missing_covers(
+    rows: list, id_key: str, isbn_key: str, title_key: str, author_key: str, url_key: str
+) -> list[dict]:
     """Shared helper for with_book_covers/with_loan_covers. Looks up every
     row missing a cover concurrently (these are independent, slow network
     calls -- doing them one at a time made a page with many uncached books
@@ -76,11 +83,11 @@ def _resolve_missing_covers(rows, id_key, isbn_key, title_key, author_key, url_k
     return result
 
 
-def with_book_covers(books):
+def with_book_covers(books: list) -> list[dict]:
     return _resolve_missing_covers(books, 'id', 'isbn', 'title', 'author', 'cover_url')
 
 
-def with_loan_covers(loans):
+def with_loan_covers(loans: list) -> list[dict]:
     return _resolve_missing_covers(loans, 'book_id', 'book_isbn', 'book_title', 'book_author', 'book_cover_url')
 
 
@@ -135,9 +142,11 @@ def login():
             session['user_id'] = user['id']
             session['username'] = user['username']
             session['role'] = user['role']
+            logger.info('login success user=%s ip=%s', username, request.remote_addr)
             flash('Welcome back, ' + user['username'] + '.', 'success')
             next_url = request.args.get('next')
             return redirect(next_url or home_url())
+        logger.warning('login failed user=%s ip=%s', username, request.remote_addr)
         flash('Incorrect username or password.', 'error')
     return render_template('login.html')
 
@@ -269,8 +278,10 @@ def edit_book(book_id):
 @login_required
 @admin_required
 def delete_book(book_id):
-    db.delete_book(book_id)
-    flash('Book deleted.', 'success')
+    ok, error = db.delete_book(book_id)
+    if ok:
+        logger.info('book deleted id=%s by=%s', book_id, session.get('username'))
+    flash('Book deleted.' if ok else error, 'success' if ok else 'error')
     return redirect(url_for('books'))
 
 
@@ -278,12 +289,21 @@ def delete_book(book_id):
 # Members
 # --------------------------------------------------------------------------
 
+MEMBERS_PER_PAGE = 12
+
+
 @app.route('/members')
 @login_required
 @admin_required
 def members():
     search = request.args.get('q', '')
-    return render_template('members.html', members=db.get_members(search), search=search)
+    page = max(request.args.get('page', 1, type=int), 1)
+    rows, total = db.get_members(search, page=page, per_page=MEMBERS_PER_PAGE)
+    total_pages = max((total + MEMBERS_PER_PAGE - 1) // MEMBERS_PER_PAGE, 1)
+    return render_template(
+        'members.html', members=rows, search=search,
+        page=page, total_pages=total_pages, total=total,
+    )
 
 
 @app.route('/members/add', methods=['GET', 'POST'])
@@ -325,14 +345,44 @@ def edit_member(member_id):
 @login_required
 @admin_required
 def delete_member(member_id):
-    db.delete_member(member_id)
-    flash('Member deleted.', 'success')
+    ok, error = db.delete_member(member_id)
+    if ok:
+        logger.info('member deleted id=%s by=%s', member_id, session.get('username'))
+    flash('Member deleted.' if ok else error, 'success' if ok else 'error')
     return redirect(url_for('members'))
+
+
+# --------------------------------------------------------------------------
+# Users (admin/member role management)
+# --------------------------------------------------------------------------
+
+@app.route('/users')
+@login_required
+@admin_required
+def users():
+    return render_template('users.html', users=db.get_all_users())
+
+
+@app.route('/users/<int:user_id>/role', methods=['POST'])
+@login_required
+@admin_required
+def update_user_role(user_id):
+    if user_id == session.get('user_id'):
+        flash("You can't change your own role.", 'error')
+        return redirect(url_for('users'))
+    new_role = 'admin' if request.form.get('role') == 'admin' else 'member'
+    db.update_user_role(user_id, new_role)
+    logger.info('role changed user_id=%s new_role=%s by=%s', user_id, new_role, session.get('username'))
+    flash('Role updated.', 'success')
+    return redirect(url_for('users'))
 
 
 # --------------------------------------------------------------------------
 # Loans
 # --------------------------------------------------------------------------
+
+LOANS_PER_PAGE = 12
+
 
 @app.route('/loans')
 @login_required
@@ -340,6 +390,9 @@ def delete_member(member_id):
 def loans():
     status = request.args.get('status')
     search = request.args.get('q', '')
+    page = max(request.args.get('page', 1, type=int), 1)
+    rows, total = db.get_loans(status, search, page=page, per_page=LOANS_PER_PAGE)
+    total_pages = max((total + LOANS_PER_PAGE - 1) // LOANS_PER_PAGE, 1)
     borrow_books = [
         {'id': b['id'], 'title': b['title'], 'author': b['author'],
          'cover_url': b['cover_url'], 'available_copies': b['available_copies']}
@@ -348,9 +401,12 @@ def loans():
     borrow_members = [{'id': m['id'], 'name': m['name'], 'email': m['email']} for m in db.get_members()]
     return render_template(
         'loans.html',
-        loans=with_loan_covers(db.get_loans(status, search)),
+        loans=with_loan_covers(rows),
         status=status,
         search=search,
+        page=page,
+        total_pages=total_pages,
+        total=total,
         borrow_books=borrow_books,
         borrow_members=borrow_members,
     )

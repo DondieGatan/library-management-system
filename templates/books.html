@@ -16,7 +16,7 @@
   <div class="search-input-wrap">
     <input type="text" name="q" value="{{ search }}" placeholder="Search by title, author, or category…"
            oninput="renderBookSuggestions(this.value)" onfocus="renderBookSuggestions(this.value)"
-           onblur="setTimeout(hideBookSuggestions, 150)">
+           onblur="setTimeout(hideBookSuggestions, 150)" onkeydown="handleBookSuggestionKeydown(event)">
     <div id="search-suggestions" class="search-suggestions"></div>
   </div>
   <button type="submit" class="btn btn-ghost">Search</button>
@@ -31,8 +31,11 @@ function escapeHtml(s) {
   });
 }
 
+var bookSuggestionIndex = -1;
+
 function renderBookSuggestions(query) {
   var box = document.getElementById('search-suggestions');
+  bookSuggestionIndex = -1;
   query = (query || '').trim().toLowerCase();
   if (!query) { box.classList.remove('open'); box.innerHTML = ''; return; }
 
@@ -57,6 +60,35 @@ function renderBookSuggestions(query) {
 
 function hideBookSuggestions() {
   document.getElementById('search-suggestions').classList.remove('open');
+}
+
+function handleBookSuggestionKeydown(e) {
+  var box = document.getElementById('search-suggestions');
+  if (!box.classList.contains('open')) { return; }
+  var items = box.querySelectorAll('.search-suggestion-item');
+  if (!items.length) { return; }
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    bookSuggestionIndex = Math.min(bookSuggestionIndex + 1, items.length - 1);
+    highlightSuggestion(items, bookSuggestionIndex);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    bookSuggestionIndex = Math.max(bookSuggestionIndex - 1, 0);
+    highlightSuggestion(items, bookSuggestionIndex);
+  } else if (e.key === 'Enter' && bookSuggestionIndex >= 0) {
+    e.preventDefault();
+    items[bookSuggestionIndex].click();
+  } else if (e.key === 'Escape') {
+    hideBookSuggestions();
+  }
+}
+
+function highlightSuggestion(items, index) {
+  items.forEach(function (item, i) {
+    item.classList.toggle('search-suggestion-highlighted', i === index);
+  });
+  if (items[index]) { items[index].scrollIntoView({ block: 'nearest' }); }
 }
 </script>
 

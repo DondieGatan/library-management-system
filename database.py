@@ -5,8 +5,10 @@ from datetime import date, timedelta
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'library.db')
 LOAN_PERIOD_DAYS = 14
 
+Row = sqlite3.Row
 
-def get_connection():
+
+def get_connection() -> sqlite3.Connection:
     # Read live (not cached at import time) so tests can point this at an
     # isolated temp database via the DATABASE_PATH env var.
     conn = sqlite3.connect(os.environ.get('DATABASE_PATH', DEFAULT_DB_PATH))
@@ -15,7 +17,7 @@ def get_connection():
     return conn
 
 
-def init_db():
+def init_db() -> None:
     conn = get_connection()
     conn.executescript('''
         CREATE TABLE IF NOT EXISTS books (
@@ -85,11 +87,11 @@ def init_db():
 # Books
 # --------------------------------------------------------------------------
 
-def get_books(search='', page=None, per_page=10):
+def get_books(search: str = '', page: int | None = None, per_page: int = 10) -> list[Row] | tuple[list[Row], int]:
     conn = get_connection()
     like = f'%{search}%'
     where = 'WHERE title LIKE ? OR author LIKE ? OR category LIKE ?' if search else ''
-    params = (like, like, like) if search else ()
+    params: tuple = (like, like, like) if search else ()
 
     total = conn.execute(f'SELECT COUNT(*) AS n FROM books {where}', params).fetchone()['n']
 
@@ -105,7 +107,7 @@ def get_books(search='', page=None, per_page=10):
     return rows
 
 
-def get_all_books_lite():
+def get_all_books_lite() -> list[dict]:
     """Minimal id/title/author/cover for every book -- used to power the
     search suggestion dropdown without a network round trip per keystroke."""
     conn = get_connection()
@@ -114,14 +116,14 @@ def get_all_books_lite():
     return [dict(r) for r in rows]
 
 
-def get_book(book_id):
+def get_book(book_id: int) -> Row | None:
     conn = get_connection()
     row = conn.execute('SELECT * FROM books WHERE id = ?', (book_id,)).fetchone()
     conn.close()
     return row
 
 
-def add_book(title, author, isbn, category, total_copies):
+def add_book(title: str, author: str, isbn: str, category: str, total_copies: int) -> None:
     conn = get_connection()
     conn.execute(
         'INSERT INTO books (title, author, isbn, category, total_copies, available_copies) VALUES (?, ?, ?, ?, ?, ?)',
@@ -131,7 +133,7 @@ def add_book(title, author, isbn, category, total_copies):
     conn.close()
 
 
-def update_book(book_id, title, author, isbn, category, total_copies):
+def update_book(book_id: int, title: str, author: str, isbn: str, category: str, total_copies: int) -> None:
     conn = get_connection()
     current = conn.execute('SELECT total_copies, available_copies FROM books WHERE id = ?', (book_id,)).fetchone()
     borrowed_out = current['total_copies'] - current['available_copies']
@@ -146,82 +148,107 @@ def update_book(book_id, title, author, isbn, category, total_copies):
     conn.close()
 
 
-def update_book_cover(book_id, cover_url):
+def update_book_cover(book_id: int, cover_url: str) -> None:
     conn = get_connection()
     conn.execute('UPDATE books SET cover_url = ? WHERE id = ?', (cover_url, book_id))
     conn.commit()
     conn.close()
 
 
-def update_book_description(book_id, description):
+def update_book_description(book_id: int, description: str) -> None:
     conn = get_connection()
     conn.execute('UPDATE books SET description = ? WHERE id = ?', (description, book_id))
     conn.commit()
     conn.close()
 
 
-def delete_book(book_id):
+def delete_book(book_id: int) -> tuple[bool, str | None]:
+    """Refuses to delete a book with a copy currently on loan -- the loans
+    table cascades on book deletion, so without this guard a delete would
+    silently wipe that loan's record along with the book."""
     conn = get_connection()
+    active = conn.execute(
+        "SELECT COUNT(*) AS n FROM loans WHERE book_id = ? AND status = 'borrowed'", (book_id,)
+    ).fetchone()['n']
+    if active:
+        conn.close()
+        return False, 'This book has a copy currently on loan and cannot be deleted.'
     conn.execute('DELETE FROM books WHERE id = ?', (book_id,))
     conn.commit()
     conn.close()
+    return True, None
 
 
 # --------------------------------------------------------------------------
 # Members
 # --------------------------------------------------------------------------
 
-def get_members(search=''):
+def get_members(search: str = '', page: int | None = None, per_page: int = 12) -> list[Row] | tuple[list[Row], int]:
     conn = get_connection()
-    if search:
-        like = f'%{search}%'
-        rows = conn.execute(
-            'SELECT * FROM members WHERE name LIKE ? OR email LIKE ? ORDER BY name', (like, like)
-        ).fetchall()
-    else:
-        rows = conn.execute('SELECT * FROM members ORDER BY name').fetchall()
+    like = f'%{search}%'
+    where = 'WHERE name LIKE ? OR email LIKE ?' if search else ''
+    params: tuple = (like, like) if search else ()
+
+    total = conn.execute(f'SELECT COUNT(*) AS n FROM members {where}', params).fetchone()['n']
+
+    query = f'SELECT * FROM members {where} ORDER BY name'
+    if page is not None:
+        query += ' LIMIT ? OFFSET ?'
+        params = params + (per_page, (page - 1) * per_page)
+    rows = conn.execute(query, params).fetchall()
     conn.close()
+
+    if page is not None:
+        return rows, total
     return rows
 
 
-def get_member(member_id):
+def get_member(member_id: int) -> Row | None:
     conn = get_connection()
     row = conn.execute('SELECT * FROM members WHERE id = ?', (member_id,)).fetchone()
     conn.close()
     return row
 
 
-def add_member(name, email, phone):
+def add_member(name: str, email: str, phone: str) -> None:
     conn = get_connection()
     conn.execute('INSERT INTO members (name, email, phone) VALUES (?, ?, ?)', (name, email, phone))
     conn.commit()
     conn.close()
 
 
-def update_member(member_id, name, email, phone):
+def update_member(member_id: int, name: str, email: str, phone: str) -> None:
     conn = get_connection()
     conn.execute('UPDATE members SET name=?, email=?, phone=? WHERE id=?', (name, email, phone, member_id))
     conn.commit()
     conn.close()
 
 
-def delete_member(member_id):
+def delete_member(member_id: int) -> tuple[bool, str | None]:
+    """Refuses to delete a member with a book currently on loan -- see
+    delete_book for why (the loans table cascades on delete)."""
     conn = get_connection()
+    active = conn.execute(
+        "SELECT COUNT(*) AS n FROM loans WHERE member_id = ? AND status = 'borrowed'", (member_id,)
+    ).fetchone()['n']
+    if active:
+        conn.close()
+        return False, 'This member has a book currently on loan and cannot be deleted.'
     conn.execute('DELETE FROM members WHERE id = ?', (member_id,))
     conn.commit()
     conn.close()
+    return True, None
 
 
 # --------------------------------------------------------------------------
 # Loans (borrow / return)
 # --------------------------------------------------------------------------
 
-def get_loans(status=None, search=''):
+def get_loans(
+    status: str | None = None, search: str = '', page: int | None = None, per_page: int = 12
+) -> list[Row] | tuple[list[Row], int]:
     conn = get_connection()
-    query = '''
-        SELECT loans.*, books.title AS book_title, books.isbn AS book_isbn,
-               books.author AS book_author, books.cover_url AS book_cover_url,
-               members.name AS member_name
+    base = '''
         FROM loans
         JOIN books ON books.id = loans.book_id
         JOIN members ON members.id = loans.member_id
@@ -238,15 +265,29 @@ def get_loans(status=None, search=''):
         conditions.append('(books.title LIKE ? OR members.name LIKE ?)')
         like = f'%{search}%'
         params.extend([like, like])
-    if conditions:
-        query += ' WHERE ' + ' AND '.join(conditions)
-    query += ' ORDER BY loans.borrow_date DESC'
+    where = (' WHERE ' + ' AND '.join(conditions)) if conditions else ''
+
+    total = conn.execute(f'SELECT COUNT(*) AS n {base}{where}', params).fetchone()['n']
+
+    query = f'''
+        SELECT loans.*, books.title AS book_title, books.isbn AS book_isbn,
+               books.author AS book_author, books.cover_url AS book_cover_url,
+               members.name AS member_name
+        {base}{where}
+        ORDER BY loans.borrow_date DESC
+    '''
+    if page is not None:
+        query += ' LIMIT ? OFFSET ?'
+        params = params + [per_page, (page - 1) * per_page]
     rows = conn.execute(query, params).fetchall()
     conn.close()
+
+    if page is not None:
+        return rows, total
     return rows
 
 
-def get_book_loans(book_id):
+def get_book_loans(book_id: int) -> list[Row]:
     conn = get_connection()
     rows = conn.execute('''
         SELECT loans.*, members.name AS member_name
@@ -259,7 +300,7 @@ def get_book_loans(book_id):
     return rows
 
 
-def get_books_by_category():
+def get_books_by_category() -> list[Row]:
     conn = get_connection()
     rows = conn.execute(
         'SELECT category, COUNT(*) AS n FROM books GROUP BY category ORDER BY n DESC'
@@ -268,7 +309,7 @@ def get_books_by_category():
     return rows
 
 
-def borrow_book(book_id, member_id):
+def borrow_book(book_id: int, member_id: int) -> tuple[bool, str | None]:
     conn = get_connection()
     book = conn.execute('SELECT available_copies FROM books WHERE id = ?', (book_id,)).fetchone()
     if not book or book['available_copies'] < 1:
@@ -287,7 +328,7 @@ def borrow_book(book_id, member_id):
     return True, None
 
 
-def return_book(loan_id):
+def return_book(loan_id: int) -> bool:
     conn = get_connection()
     loan = conn.execute('SELECT * FROM loans WHERE id = ?', (loan_id,)).fetchone()
     if not loan or loan['status'] == 'returned':
@@ -308,7 +349,7 @@ def return_book(loan_id):
 # Dashboard stats
 # --------------------------------------------------------------------------
 
-def get_stats():
+def get_stats() -> dict:
     conn = get_connection()
     total_books = conn.execute('SELECT COALESCE(SUM(total_copies), 0) AS n FROM books').fetchone()['n']
     total_titles = conn.execute('SELECT COUNT(*) AS n FROM books').fetchone()['n']
@@ -332,25 +373,39 @@ def get_stats():
 # Users (authentication)
 # --------------------------------------------------------------------------
 
-def get_user_by_username(username):
+def get_user_by_username(username: str) -> Row | None:
     conn = get_connection()
     row = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
     conn.close()
     return row
 
 
-def get_user_by_id(user_id):
+def get_user_by_id(user_id: int) -> Row | None:
     conn = get_connection()
     row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
     conn.close()
     return row
 
 
-def create_user(username, password_hash, role='member'):
+def create_user(username: str, password_hash: str, role: str = 'member') -> None:
     conn = get_connection()
     conn.execute(
         'INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
         (username, password_hash, role)
     )
+    conn.commit()
+    conn.close()
+
+
+def get_all_users() -> list[Row]:
+    conn = get_connection()
+    rows = conn.execute('SELECT id, username, role, created_at FROM users ORDER BY username').fetchall()
+    conn.close()
+    return rows
+
+
+def update_user_role(user_id: int, role: str) -> None:
+    conn = get_connection()
+    conn.execute('UPDATE users SET role = ? WHERE id = ?', (role, user_id))
     conn.commit()
     conn.close()

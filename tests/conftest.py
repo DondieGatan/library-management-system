@@ -31,6 +31,7 @@ def client(tmp_path, monkeypatch):
 
 
 def register_and_login(client, username='alice', password='password123', promote_admin=False):
+    client.post('/logout')  # in case a different user is already logged in, so register isn't skipped
     client.post('/register', data={
         'username': username, 'password': password, 'confirm_password': password,
     })

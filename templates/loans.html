@@ -16,7 +16,8 @@
         <input type="text" id="borrow-book-search" placeholder="Search books…" autocomplete="off"
                oninput="renderPickerSuggestions('book', this.value)"
                onfocus="renderPickerSuggestions('book', this.value)"
-               onblur="setTimeout(function () { hidePickerSuggestions('book'); }, 150)">
+               onblur="setTimeout(function () { hidePickerSuggestions('book'); }, 150)"
+               onkeydown="handlePickerKeydown(event, 'book')">
         <input type="hidden" name="book_id" id="borrow-book-id">
         <div id="book-suggestions" class="search-suggestions"></div>
       </div>
@@ -26,7 +27,8 @@
         <input type="text" id="borrow-member-search" placeholder="Search members…" autocomplete="off"
                oninput="renderPickerSuggestions('member', this.value)"
                onfocus="renderPickerSuggestions('member', this.value)"
-               onblur="setTimeout(function () { hidePickerSuggestions('member'); }, 150)">
+               onblur="setTimeout(function () { hidePickerSuggestions('member'); }, 150)"
+               onkeydown="handlePickerKeydown(event, 'member')">
         <input type="hidden" name="member_id" id="borrow-member-id">
         <div id="member-suggestions" class="search-suggestions"></div>
       </div>
@@ -45,8 +47,11 @@ function pickerEscapeHtml(s) {
   });
 }
 
+var pickerHighlightIndex = { book: -1, member: -1 };
+
 function renderPickerSuggestions(kind, query) {
   var box = document.getElementById(kind + '-suggestions');
+  pickerHighlightIndex[kind] = -1;
   query = (query || '').trim().toLowerCase();
   if (!query) { box.classList.remove('open'); box.innerHTML = ''; return; }
 
@@ -93,6 +98,36 @@ function selectPickerItem(kind, id, label) {
 
 function hidePickerSuggestions(kind) {
   document.getElementById(kind + '-suggestions').classList.remove('open');
+}
+
+function handlePickerKeydown(e, kind) {
+  var box = document.getElementById(kind + '-suggestions');
+  if (!box.classList.contains('open')) { return; }
+  var items = box.querySelectorAll('.search-suggestion-item[data-id]');
+  if (!items.length) { return; }
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    pickerHighlightIndex[kind] = Math.min(pickerHighlightIndex[kind] + 1, items.length - 1);
+    highlightPickerSuggestion(items, pickerHighlightIndex[kind]);
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    pickerHighlightIndex[kind] = Math.max(pickerHighlightIndex[kind] - 1, 0);
+    highlightPickerSuggestion(items, pickerHighlightIndex[kind]);
+  } else if (e.key === 'Enter' && pickerHighlightIndex[kind] >= 0) {
+    e.preventDefault();
+    var item = items[pickerHighlightIndex[kind]];
+    selectPickerItem(kind, item.dataset.id, item.dataset.label);
+  } else if (e.key === 'Escape') {
+    hidePickerSuggestions(kind);
+  }
+}
+
+function highlightPickerSuggestion(items, index) {
+  items.forEach(function (item, i) {
+    item.classList.toggle('search-suggestion-highlighted', i === index);
+  });
+  if (items[index]) { items[index].scrollIntoView({ block: 'nearest' }); }
 }
 
 function validateBorrowForm() {
@@ -168,6 +203,15 @@ function validateBorrowForm() {
     {% endfor %}
   </tbody>
 </table>
+
+{% if total_pages > 1 %}
+<nav class="pagination">
+  <a href="{{ url_for('loans', status=status, q=search, page=page-1) }}" class="btn btn-ghost btn-small {{ 'disabled' if page <= 1 }}">← Prev</a>
+  <span class="pagination-status">Page {{ page }} of {{ total_pages }} &middot; {{ total }} loans</span>
+  <a href="{{ url_for('loans', status=status, q=search, page=page+1) }}" class="btn btn-ghost btn-small {{ 'disabled' if page >= total_pages }}">Next →</a>
+</nav>
+{% endif %}
+
 {% else %}
 <div class="empty-state">
   <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2v20M2 12h20"/></svg>

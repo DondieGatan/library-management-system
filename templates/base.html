@@ -26,6 +26,7 @@
       {% if current_role == 'admin' %}
       <a href="{{ url_for('members') }}" class="{{ 'active' if request.endpoint in ['members','add_member','edit_member'] }}">Members</a>
       <a href="{{ url_for('loans') }}" class="{{ 'active' if request.endpoint == 'loans' }}">Loans</a>
+      <a href="{{ url_for('users') }}" class="{{ 'active' if request.endpoint in ['users','update_user_role'] }}">Users</a>
       {% endif %}
     </div>
     <div class="nav-user">

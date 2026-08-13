@@ -55,3 +55,35 @@ def test_book_detail_shows_loan_history_for_admin_only(client):
     resp = client.get(f'/books/{book["id"]}')
     assert b'Loan History' in resp.data
     assert b'Test Member' in resp.data
+
+
+def test_cannot_delete_book_with_active_loan(client):
+    register_and_login(client, username='loanadmin5', promote_admin=True)
+    book, member = _add_book_and_member()
+    client.post('/loans/borrow', data={'book_id': book['id'], 'member_id': member['id']})
+
+    resp = client.post(f'/books/delete/{book["id"]}', follow_redirects=True)
+    assert b'currently on loan' in resp.data
+    assert database.get_book(book['id']) is not None
+
+
+def test_cannot_delete_member_with_active_loan(client):
+    register_and_login(client, username='loanadmin6', promote_admin=True)
+    book, member = _add_book_and_member()
+    client.post('/loans/borrow', data={'book_id': book['id'], 'member_id': member['id']})
+
+    resp = client.post(f'/members/delete/{member["id"]}', follow_redirects=True)
+    assert b'currently on loan' in resp.data
+    assert database.get_member(member['id']) is not None
+
+
+def test_can_delete_book_after_it_is_returned(client):
+    register_and_login(client, username='loanadmin7', promote_admin=True)
+    book, member = _add_book_and_member()
+    client.post('/loans/borrow', data={'book_id': book['id'], 'member_id': member['id']})
+    loan = database.get_loans(status='borrowed')[0]
+    client.post(f'/loans/return/{loan["id"]}')
+
+    resp = client.post(f'/books/delete/{book["id"]}', follow_redirects=True)
+    assert b'Book deleted' in resp.data
+    assert database.get_book(book['id']) is None

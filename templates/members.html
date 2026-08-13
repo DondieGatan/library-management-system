@@ -41,6 +41,15 @@
     {% endfor %}
   </tbody>
 </table>
+
+{% if total_pages > 1 %}
+<nav class="pagination">
+  <a href="{{ url_for('members', q=search, page=page-1) }}" class="btn btn-ghost btn-small {{ 'disabled' if page <= 1 }}">← Prev</a>
+  <span class="pagination-status">Page {{ page }} of {{ total_pages }} &middot; {{ total }} members</span>
+  <a href="{{ url_for('members', q=search, page=page+1) }}" class="btn btn-ghost btn-small {{ 'disabled' if page >= total_pages }}">Next →</a>
+</nav>
+{% endif %}
+
 {% else %}
 <div class="empty-state">
   <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
