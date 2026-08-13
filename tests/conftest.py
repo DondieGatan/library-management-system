@@ -1,0 +1,43 @@
+import importlib
+import sys
+import os
+
+import pytest
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+
+@pytest.fixture
+def client(tmp_path, monkeypatch):
+    """A Flask test client backed by an isolated, empty temp database --
+    never touches the real library.db. Reloads app/database/covers each
+    time so init_db() runs fresh against the new DB path."""
+    monkeypatch.setenv('DATABASE_PATH', str(tmp_path / 'test.db'))
+    monkeypatch.setenv('SECRET_KEY', 'test-secret-key')
+
+    import database
+    importlib.reload(database)
+    import covers
+    importlib.reload(covers)
+    import app as app_module
+    importlib.reload(app_module)
+
+    app_module.app.config['TESTING'] = True
+    app_module.app.config['WTF_CSRF_ENABLED'] = False
+    app_module.limiter.enabled = False
+
+    with app_module.app.test_client() as c:
+        yield c
+
+
+def register_and_login(client, username='alice', password='password123', promote_admin=False):
+    client.post('/register', data={
+        'username': username, 'password': password, 'confirm_password': password,
+    })
+    if promote_admin:
+        import database
+        conn = database.get_connection()
+        conn.execute("UPDATE users SET role = 'admin' WHERE username = ?", (username,))
+        conn.commit()
+        conn.close()
+    return client.post('/login', data={'username': username, 'password': password}, follow_redirects=True)

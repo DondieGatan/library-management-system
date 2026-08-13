@@ -9,26 +9,107 @@
 
 <div class="panel form-panel">
   <h2>Borrow a Book</h2>
-  <form method="post" action="{{ url_for('borrow') }}" class="field-row">
+  <form method="post" action="{{ url_for('borrow') }}" class="field-row" onsubmit="return validateBorrowForm()">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Book
-      <select name="book_id" required>
-        {% for book in books %}
-          <option value="{{ book.id }}" {{ 'disabled' if book.available_copies == 0 }}>
-            {{ book.title }} ({{ book.available_copies }} available)
-          </option>
-        {% endfor %}
-      </select>
+      <div class="search-input-wrap">
+        <input type="text" id="borrow-book-search" placeholder="Search books…" autocomplete="off"
+               oninput="renderPickerSuggestions('book', this.value)"
+               onfocus="renderPickerSuggestions('book', this.value)"
+               onblur="setTimeout(function () { hidePickerSuggestions('book'); }, 150)">
+        <input type="hidden" name="book_id" id="borrow-book-id">
+        <div id="book-suggestions" class="search-suggestions"></div>
+      </div>
     </label>
     <label>Member
-      <select name="member_id" required>
-        {% for member in members %}
-          <option value="{{ member.id }}">{{ member.name }}</option>
-        {% endfor %}
-      </select>
+      <div class="search-input-wrap">
+        <input type="text" id="borrow-member-search" placeholder="Search members…" autocomplete="off"
+               oninput="renderPickerSuggestions('member', this.value)"
+               onfocus="renderPickerSuggestions('member', this.value)"
+               onblur="setTimeout(function () { hidePickerSuggestions('member'); }, 150)">
+        <input type="hidden" name="member_id" id="borrow-member-id">
+        <div id="member-suggestions" class="search-suggestions"></div>
+      </div>
     </label>
     <button type="submit" class="btn btn-primary">Borrow</button>
   </form>
 </div>
+
+<script>
+var PICKER_BOOKS = {{ borrow_books | tojson }};
+var PICKER_MEMBERS = {{ borrow_members | tojson }};
+
+function pickerEscapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function renderPickerSuggestions(kind, query) {
+  var box = document.getElementById(kind + '-suggestions');
+  query = (query || '').trim().toLowerCase();
+  if (!query) { box.classList.remove('open'); box.innerHTML = ''; return; }
+
+  var html;
+  if (kind === 'book') {
+    var matches = PICKER_BOOKS.filter(function (b) {
+      return b.title.toLowerCase().indexOf(query) !== -1 || (b.author || '').toLowerCase().indexOf(query) !== -1;
+    }).slice(0, 8);
+    if (!matches.length) { box.classList.remove('open'); box.innerHTML = ''; return; }
+    html = matches.map(function (b) {
+      var unavailable = b.available_copies === 0;
+      var cover = b.cover_url
+        ? '<img src="' + b.cover_url + '" alt="" class="search-suggestion-cover">'
+        : '<span class="search-suggestion-cover search-suggestion-cover-placeholder"></span>';
+      var attrs = unavailable ? ' class="search-suggestion-item search-suggestion-disabled"'
+        : ' class="search-suggestion-item" data-id="' + b.id + '" data-label="' + pickerEscapeHtml(b.title) + '"';
+      return '<div' + attrs + '>' + cover + '<span class="search-suggestion-text">' +
+        '<span class="search-suggestion-title">' + pickerEscapeHtml(b.title) + '</span>' +
+        '<span class="search-suggestion-author">' + (unavailable ? 'Not available' : b.available_copies + ' available') + '</span>' +
+        '</span></div>';
+    }).join('');
+  } else {
+    var mmatches = PICKER_MEMBERS.filter(function (m) {
+      return m.name.toLowerCase().indexOf(query) !== -1 || (m.email || '').toLowerCase().indexOf(query) !== -1;
+    }).slice(0, 8);
+    if (!mmatches.length) { box.classList.remove('open'); box.innerHTML = ''; return; }
+    html = mmatches.map(function (m) {
+      return '<div class="search-suggestion-item" data-id="' + m.id + '" data-label="' + pickerEscapeHtml(m.name) + '">' +
+        '<span class="search-suggestion-text">' +
+        '<span class="search-suggestion-title">' + pickerEscapeHtml(m.name) + '</span>' +
+        '<span class="search-suggestion-author">' + pickerEscapeHtml(m.email || '') + '</span>' +
+        '</span></div>';
+    }).join('');
+  }
+  box.innerHTML = html;
+  box.classList.add('open');
+}
+
+function selectPickerItem(kind, id, label) {
+  document.getElementById('borrow-' + kind + '-search').value = label;
+  document.getElementById('borrow-' + kind + '-id').value = id;
+  hidePickerSuggestions(kind);
+}
+
+function hidePickerSuggestions(kind) {
+  document.getElementById(kind + '-suggestions').classList.remove('open');
+}
+
+function validateBorrowForm() {
+  if (!document.getElementById('borrow-book-id').value || !document.getElementById('borrow-member-id').value) {
+    alert('Pick a book and a member from the suggestions first.');
+    return false;
+  }
+  return true;
+}
+
+['book', 'member'].forEach(function (kind) {
+  document.getElementById(kind + '-suggestions').addEventListener('mousedown', function (e) {
+    var item = e.target.closest('.search-suggestion-item[data-id]');
+    if (item) { selectPickerItem(kind, item.dataset.id, item.dataset.label); }
+  });
+});
+</script>
 
 <form class="search-bar" method="get">
   <input type="hidden" name="status" value="{{ status or '' }}">
@@ -73,12 +154,15 @@
           <span class="badge">Borrowed</span>
         {% endif %}
       </td>
-      <td class="actions">
-        {% if loan.status == 'borrowed' %}
-        <form method="post" action="{{ url_for('return_loan', loan_id=loan.id) }}">
-          <button type="submit" class="icon-btn">Mark Returned</button>
-        </form>
-        {% endif %}
+      <td>
+        <div class="actions">
+          {% if loan.status == 'borrowed' %}
+          <form method="post" action="{{ url_for('return_loan', loan_id=loan.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="icon-btn">Mark Returned</button>
+          </form>
+          {% endif %}
+        </div>
       </td>
     </tr>
     {% endfor %}

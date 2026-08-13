@@ -3,3 +3,5 @@ __pycache__/
 library.db
 venv/
 *.log
+.env
+.pytest_cache/

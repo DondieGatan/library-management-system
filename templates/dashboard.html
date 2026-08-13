@@ -47,18 +47,21 @@
     <h2>Books by Category</h2>
   </div>
   {% if category_counts %}
-  <form method="get" class="category-picker">
-    <select name="category" onchange="this.form.submit()">
+  <div class="category-picker">
+    <select onchange="
+      var n = this.options[this.selectedIndex].dataset.count;
+      document.getElementById('category-count-value').textContent = n;
+      document.getElementById('category-count-label').textContent = (n === '1') ? 'book' : 'books';
+    ">
       {% for c in category_counts %}
-      <option value="{{ c.category }}" {{ 'selected' if c.category == selected_category }}>{{ c.category }}</option>
+      <option data-count="{{ c.n }}" {{ 'selected' if c.category == selected_category }}>{{ c.category }}</option>
       {% endfor %}
     </select>
-    <noscript><button type="submit" class="btn btn-ghost btn-small">View</button></noscript>
     <div class="category-count">
-      <span class="category-count-value">{{ selected_count }}</span>
-      <span class="category-count-label">{{ 'book' if selected_count == 1 else 'books' }}</span>
+      <span id="category-count-value" class="category-count-value">{{ selected_count }}</span>
+      <span id="category-count-label" class="category-count-label">{{ 'book' if selected_count == 1 else 'books' }}</span>
     </div>
-  </form>
+  </div>
   {% else %}
   <p class="empty-state-inline">No books yet.</p>
   {% endif %}

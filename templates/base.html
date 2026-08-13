@@ -10,7 +10,7 @@
 <body>
 
 <nav class="navbar">
-  <a href="{{ url_for('dashboard') if current_username else url_for('login') }}" class="brand">
+  <a href="{{ (url_for('dashboard') if current_role == 'admin' else url_for('books')) if current_username else url_for('login') }}" class="brand">
     <svg class="brand-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path class="brand-icon-left" d="M4 5.5C4 4.67 4.67 4 5.5 4H11.5V20H5.5C4.67 20 4 19.33 4 18.5V5.5Z" fill="currentColor" opacity="0.9"/>
       <path class="brand-icon-right" d="M20 5.5C20 4.67 19.33 4 18.5 4H12.5V20H18.5C19.33 20 20 19.33 20 18.5V5.5Z" fill="currentColor" opacity="0.55"/>
@@ -19,7 +19,9 @@
   </a>
   {% if current_username %}
     <div class="nav-links">
+      {% if current_role == 'admin' %}
       <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' }}">Dashboard</a>
+      {% endif %}
       <a href="{{ url_for('books') }}" class="{{ 'active' if request.endpoint in ['books','add_book','edit_book','book_detail'] }}">Books</a>
       {% if current_role == 'admin' %}
       <a href="{{ url_for('members') }}" class="{{ 'active' if request.endpoint in ['members','add_member','edit_member'] }}">Members</a>
@@ -29,8 +31,18 @@
     <div class="nav-user">
       <span class="nav-username">{{ current_username }}{% if current_role == 'admin' %}<span class="role-badge">Admin</span>{% endif %}</span>
       <form method="post" action="{{ url_for('logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-ghost btn-small">Log Out</button>
       </form>
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="toast-stack">
+            {% for category, message in messages %}
+              <div class="toast toast-{{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
     </div>
   {% else %}
     <div class="nav-links">
@@ -41,16 +53,6 @@
 </nav>
 
 <main class="container">
-  {% with messages = get_flashed_messages(with_categories=true) %}
-    {% if messages %}
-      <div class="toast-stack">
-        {% for category, message in messages %}
-          <div class="toast toast-{{ category }}">{{ message }}</div>
-        {% endfor %}
-      </div>
-    {% endif %}
-  {% endwith %}
-
   {% block content %}{% endblock %}
 </main>
 

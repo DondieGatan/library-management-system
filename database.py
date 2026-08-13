@@ -2,12 +2,14 @@ import sqlite3
 import os
 from datetime import date, timedelta
 
-DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'library.db')
+DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'library.db')
 LOAN_PERIOD_DAYS = 14
 
 
 def get_connection():
-    conn = sqlite3.connect(DB_PATH)
+    # Read live (not cached at import time) so tests can point this at an
+    # isolated temp database via the DATABASE_PATH env var.
+    conn = sqlite3.connect(os.environ.get('DATABASE_PATH', DEFAULT_DB_PATH))
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA foreign_keys = ON')
     return conn
@@ -68,6 +70,13 @@ def init_db():
         conn.execute("ALTER TABLE users ADD COLUMN role TEXT NOT NULL DEFAULT 'admin'")
     except sqlite3.OperationalError:
         pass
+    # NULL = never looked up, '' = looked up but Open Library had nothing --
+    # same lazy-cache convention as cover_url, resolved on-demand when a
+    # book's detail page is opened (not for every row in a list).
+    try:
+        conn.execute('ALTER TABLE books ADD COLUMN description TEXT')
+    except sqlite3.OperationalError:
+        pass
     conn.commit()
     conn.close()
 
@@ -96,6 +105,15 @@ def get_books(search='', page=None, per_page=10):
     return rows
 
 
+def get_all_books_lite():
+    """Minimal id/title/author/cover for every book -- used to power the
+    search suggestion dropdown without a network round trip per keystroke."""
+    conn = get_connection()
+    rows = conn.execute('SELECT id, title, author, cover_url FROM books ORDER BY title').fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
 def get_book(book_id):
     conn = get_connection()
     row = conn.execute('SELECT * FROM books WHERE id = ?', (book_id,)).fetchone()
@@ -119,9 +137,9 @@ def update_book(book_id, title, author, isbn, category, total_copies):
     borrowed_out = current['total_copies'] - current['available_copies']
     new_available = max(total_copies - borrowed_out, 0)
     conn.execute(
-        # cover_url reset to NULL so a changed title/author/isbn gets its
-        # cover re-resolved instead of keeping a stale one.
-        'UPDATE books SET title=?, author=?, isbn=?, category=?, total_copies=?, available_copies=?, cover_url=NULL WHERE id=?',
+        # cover_url/description reset to NULL so a changed title/author/isbn
+        # gets both re-resolved instead of keeping stale ones.
+        'UPDATE books SET title=?, author=?, isbn=?, category=?, total_copies=?, available_copies=?, cover_url=NULL, description=NULL WHERE id=?',
         (title, author, isbn, category, total_copies, new_available, book_id)
     )
     conn.commit()
@@ -131,6 +149,13 @@ def update_book(book_id, title, author, isbn, category, total_copies):
 def update_book_cover(book_id, cover_url):
     conn = get_connection()
     conn.execute('UPDATE books SET cover_url = ? WHERE id = ?', (cover_url, book_id))
+    conn.commit()
+    conn.close()
+
+
+def update_book_description(book_id, description):
+    conn = get_connection()
+    conn.execute('UPDATE books SET description = ? WHERE id = ?', (description, book_id))
     conn.commit()
     conn.close()
 

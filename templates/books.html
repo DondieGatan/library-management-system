@@ -5,58 +5,94 @@
 <div class="page-header">
   <h1 class="page-title">Books</h1>
   <div class="header-actions">
-    <a href="{{ url_for('export_books_csv') }}" class="btn btn-ghost">Export CSV</a>
     {% if current_role == 'admin' %}
+    <a href="{{ url_for('export_books_csv') }}" class="btn btn-ghost">Export CSV</a>
     <a href="{{ url_for('add_book') }}" class="btn btn-primary">+ Add Book</a>
     {% endif %}
   </div>
 </div>
 
-<form class="search-bar" method="get">
-  <input type="text" name="q" value="{{ search }}" placeholder="Search by title, author, or category…">
+<form class="search-bar" method="get" autocomplete="off">
+  <div class="search-input-wrap">
+    <input type="text" name="q" value="{{ search }}" placeholder="Search by title, author, or category…"
+           oninput="renderBookSuggestions(this.value)" onfocus="renderBookSuggestions(this.value)"
+           onblur="setTimeout(hideBookSuggestions, 150)">
+    <div id="search-suggestions" class="search-suggestions"></div>
+  </div>
   <button type="submit" class="btn btn-ghost">Search</button>
 </form>
 
+<script>
+var ALL_BOOKS = {{ all_books_lite | tojson }};
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+function renderBookSuggestions(query) {
+  var box = document.getElementById('search-suggestions');
+  query = (query || '').trim().toLowerCase();
+  if (!query) { box.classList.remove('open'); box.innerHTML = ''; return; }
+
+  var matches = ALL_BOOKS.filter(function (b) {
+    return b.title.toLowerCase().indexOf(query) !== -1 || (b.author || '').toLowerCase().indexOf(query) !== -1;
+  }).slice(0, 8);
+
+  if (!matches.length) { box.classList.remove('open'); box.innerHTML = ''; return; }
+
+  box.innerHTML = matches.map(function (b) {
+    var cover = b.cover_url
+      ? '<img src="' + b.cover_url + '" alt="" class="search-suggestion-cover">'
+      : '<span class="search-suggestion-cover search-suggestion-cover-placeholder"></span>';
+    return '<a class="search-suggestion-item" href="/books/' + b.id + '">' + cover +
+      '<span class="search-suggestion-text">' +
+      '<span class="search-suggestion-title">' + escapeHtml(b.title) + '</span>' +
+      '<span class="search-suggestion-author">' + escapeHtml(b.author || '') + '</span>' +
+      '</span></a>';
+  }).join('');
+  box.classList.add('open');
+}
+
+function hideBookSuggestions() {
+  document.getElementById('search-suggestions').classList.remove('open');
+}
+</script>
+
 {% if books %}
-<table class="data-table">
-  <thead>
-    <tr><th>Title</th><th>Author</th><th>Category</th><th>ISBN</th><th>Available</th><th></th></tr>
-  </thead>
-  <tbody>
-    {% for book in books %}
-    <tr>
-      <td class="book-cell">
-        <a href="{{ url_for('book_detail', book_id=book.id) }}" class="book-cell-link">
-          {% if book.cover_url %}
-            <img src="{{ book.cover_url }}" alt="{{ book.title }} cover" class="book-cover">
-          {% else %}
-            <span class="book-cover book-cover-placeholder">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-            </span>
-          {% endif %}
-          <span class="book-cell-title">{{ book.title }}</span>
-        </a>
-      </td>
-      <td>{{ book.author }}</td>
-      <td><span class="badge">{{ book.category }}</span></td>
-      <td>{{ book.isbn or '—' }}</td>
-      <td>
-        <span class="badge {{ 'badge-danger' if book.available_copies == 0 else 'badge-success' }}">
-          {{ book.available_copies }} / {{ book.total_copies }}
+<div class="book-grid">
+  {% for book in books %}
+  <div class="book-card">
+    <a href="{{ url_for('book_detail', book_id=book.id) }}" class="book-card-cover-link">
+      {% if book.cover_url %}
+        <img src="{{ book.cover_url }}" alt="{{ book.title }} cover" class="book-card-cover">
+      {% else %}
+        <span class="book-card-cover book-card-cover-placeholder">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
         </span>
-      </td>
-      <td class="actions">
-        {% if current_role == 'admin' %}
-        <a href="{{ url_for('edit_book', book_id=book.id) }}" class="icon-btn">Edit</a>
-        <form method="post" action="{{ url_for('delete_book', book_id=book.id) }}" onsubmit="return confirm('Delete this book?');">
-          <button type="submit" class="icon-btn delete">Delete</button>
-        </form>
-        {% endif %}
-      </td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+      {% endif %}
+      <span class="badge book-card-availability {{ 'badge-danger' if book.available_copies == 0 else 'badge-success' }}">
+        {{ book.available_copies }} / {{ book.total_copies }}
+      </span>
+    </a>
+    <div class="book-card-info">
+      <a href="{{ url_for('book_detail', book_id=book.id) }}" class="book-card-title">{{ book.title }}</a>
+      <span class="book-card-author">{{ book.author }}</span>
+      <span class="badge book-card-category">{{ book.category }}</span>
+    </div>
+    {% if current_role == 'admin' %}
+    <div class="book-card-actions">
+      <a href="{{ url_for('edit_book', book_id=book.id) }}" class="icon-btn">Edit</a>
+      <form method="post" action="{{ url_for('delete_book', book_id=book.id) }}" onsubmit="return confirm('Delete this book?');">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="icon-btn delete">Delete</button>
+      </form>
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
 
 {% if total_pages > 1 %}
 <nav class="pagination">

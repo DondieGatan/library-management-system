@@ -5,6 +5,7 @@
 <h1 class="page-title">{{ 'Edit Member' if member else 'Add Member' }}</h1>
 
 <form class="form-panel" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <label>Full Name
     <input type="text" name="name" required value="{{ member.name if member else '' }}">
   </label>

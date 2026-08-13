@@ -1,17 +1,34 @@
 import csv
 import io
+import os
+import secrets
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from functools import wraps
+from dotenv import load_dotenv
 from flask import Flask, render_template, request, redirect, url_for, flash, session, Response
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
+from flask_wtf import CSRFProtect
 from werkzeug.security import generate_password_hash, check_password_hash
 import database as db
 import covers
 
+load_dotenv()
+
 COVER_POOL = ThreadPoolExecutor(max_workers=8)
 
 app = Flask(__name__)
-app.secret_key = 'library-management-system-dev-key'
+# Falls back to a random per-process key if SECRET_KEY isn't set so the app
+# still runs, but sessions won't survive a restart -- set SECRET_KEY in .env
+# for real use (see .env.example). Never hardcode a real key in source.
+app.secret_key = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('FLASK_DEBUG') != '1'
+
+csrf = CSRFProtect(app)
+limiter = Limiter(get_remote_address, app=app, default_limits=[])
 
 db.init_db()
 
@@ -31,9 +48,14 @@ def admin_required(view):
     def wrapped(*args, **kwargs):
         if session.get('role') != 'admin':
             flash('That action requires an admin account.', 'error')
-            return redirect(request.referrer or url_for('dashboard'))
+            return redirect(request.referrer or url_for('books'))
         return view(*args, **kwargs)
     return wrapped
+
+
+def home_url():
+    """Members have no Dashboard, so their landing page is Books instead."""
+    return url_for('dashboard') if session.get('role') == 'admin' else url_for('books')
 
 
 def _resolve_missing_covers(rows, id_key, isbn_key, title_key, author_key, url_key):
@@ -76,9 +98,10 @@ def inject_today():
 # --------------------------------------------------------------------------
 
 @app.route('/register', methods=['GET', 'POST'])
+@limiter.limit('5 per minute', methods=['POST'])
 def register():
     if 'user_id' in session:
-        return redirect(url_for('dashboard'))
+        return redirect(home_url())
     if request.method == 'POST':
         username = request.form['username'].strip()
         password = request.form['password']
@@ -100,9 +123,10 @@ def register():
 
 
 @app.route('/login', methods=['GET', 'POST'])
+@limiter.limit('5 per minute', methods=['POST'])
 def login():
     if 'user_id' in session:
-        return redirect(url_for('dashboard'))
+        return redirect(home_url())
     if request.method == 'POST':
         username = request.form['username'].strip()
         password = request.form['password']
@@ -113,7 +137,7 @@ def login():
             session['role'] = user['role']
             flash('Welcome back, ' + user['username'] + '.', 'success')
             next_url = request.args.get('next')
-            return redirect(next_url or url_for('dashboard'))
+            return redirect(next_url or home_url())
         flash('Incorrect username or password.', 'error')
     return render_template('login.html')
 
@@ -128,8 +152,10 @@ def logout():
 @app.route('/')
 @login_required
 def dashboard():
+    if session.get('role') != 'admin':
+        return redirect(url_for('books'))
     stats = db.get_stats()
-    recent_loans = with_loan_covers(db.get_loans(status='borrowed')[:5]) if session.get('role') == 'admin' else []
+    recent_loans = with_loan_covers(db.get_loans(status='borrowed')[:5])
     category_counts = db.get_books_by_category()
     selected_category = request.args.get('category') or (category_counts[0]['category'] if category_counts else None)
     selected_count = next((c['n'] for c in category_counts if c['category'] == selected_category), 0)
@@ -147,7 +173,7 @@ def dashboard():
 # Books
 # --------------------------------------------------------------------------
 
-BOOKS_PER_PAGE = 10
+BOOKS_PER_PAGE = 12  # multiple of 2/3/4/6 so the grid's last row fills evenly at common widths
 
 
 @app.route('/books')
@@ -164,6 +190,7 @@ def books():
         page=page,
         total_pages=total_pages,
         total=total,
+        all_books_lite=db.get_all_books_lite(),
     )
 
 
@@ -175,12 +202,17 @@ def book_detail(book_id):
         flash('Book not found.', 'error')
         return redirect(url_for('books'))
     book = with_book_covers([book])[0]
-    loan_history = db.get_book_loans(book_id)
+    if book.get('description') is None:
+        description = covers.resolve_description(book.get('isbn'), book['title'], book['author'])
+        db.update_book_description(book_id, description or '')
+        book['description'] = description or ''
+    loan_history = db.get_book_loans(book_id) if session.get('role') == 'admin' else []
     return render_template('book_detail.html', book=book, loan_history=loan_history)
 
 
 @app.route('/books/export.csv')
 @login_required
+@admin_required
 def export_books_csv():
     output = io.StringIO()
     writer = csv.writer(output)
@@ -308,13 +340,19 @@ def delete_member(member_id):
 def loans():
     status = request.args.get('status')
     search = request.args.get('q', '')
+    borrow_books = [
+        {'id': b['id'], 'title': b['title'], 'author': b['author'],
+         'cover_url': b['cover_url'], 'available_copies': b['available_copies']}
+        for b in db.get_books()
+    ]
+    borrow_members = [{'id': m['id'], 'name': m['name'], 'email': m['email']} for m in db.get_members()]
     return render_template(
         'loans.html',
         loans=with_loan_covers(db.get_loans(status, search)),
         status=status,
         search=search,
-        books=db.get_books(),
-        members=db.get_members(),
+        borrow_books=borrow_books,
+        borrow_members=borrow_members,
     )
 
 
@@ -356,4 +394,4 @@ def return_loan(loan_id):
 
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5050)
+    app.run(debug=os.environ.get('FLASK_DEBUG') == '1', port=int(os.environ.get('PORT', 5050)))

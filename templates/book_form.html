@@ -5,6 +5,7 @@
 <h1 class="page-title">{{ 'Edit Book' if book else 'Add Book' }}</h1>
 
 <form class="form-panel" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
   <label>Title
     <input type="text" name="title" required value="{{ book.title if book else '' }}">
   </label>

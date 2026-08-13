@@ -22,29 +22,29 @@ def _looks_like_real_cover(url):
         return False
 
 
-def _first_cover_id(params):
+def _first_doc_field(params, field):
     try:
-        query = urllib.parse.urlencode({**params, 'limit': 5, 'fields': 'cover_i'})
+        query = urllib.parse.urlencode({**params, 'limit': 5, 'fields': field})
         req = urllib.request.Request('https://openlibrary.org/search.json?' + query)
         with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
             data = json.loads(resp.read())
         for doc in data.get('docs') or []:
-            if doc.get('cover_i'):
-                return doc['cover_i']
+            if doc.get(field):
+                return doc[field]
     except Exception:
         pass
     return None
 
 
-def _search_cover_id(title, author):
-    # The top title+author match is often a specific edition with no
-    # cover on file, even when other editions of the same book have one --
+def _search_field(title, author, field):
+    # The top title+author match is often a specific edition missing the
+    # field we want, even when other editions of the same book have it --
     # so fall back to a title-only search before giving up.
     if author:
-        cover_id = _first_cover_id({'title': title, 'author': author})
-        if cover_id:
-            return cover_id
-    return _first_cover_id({'title': title})
+        value = _first_doc_field({'title': title, 'author': author}, field)
+        if value:
+            return value
+    return _first_doc_field({'title': title}, field)
 
 
 def resolve_cover_url(isbn, title, author):
@@ -56,8 +56,26 @@ def resolve_cover_url(isbn, title, author):
             if _looks_like_real_cover(url):
                 return url
 
-    cover_id = _search_cover_id(title, author)
+    cover_id = _search_field(title, author, 'cover_i')
     if cover_id:
         return f'https://covers.openlibrary.org/b/id/{cover_id}-M.jpg'
 
     return None
+
+
+def resolve_description(isbn, title, author):
+    """Returns a plain-text synopsis from the book's Open Library work
+    entry, or None if nothing usable was found."""
+    work_key = _search_field(title, author, 'key')
+    if not work_key:
+        return None
+    try:
+        req = urllib.request.Request(f'https://openlibrary.org{work_key}.json')
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:
+            work = json.loads(resp.read())
+    except Exception:
+        return None
+    description = work.get('description')
+    if isinstance(description, dict):
+        description = description.get('value')
+    return description.strip() if description else None
