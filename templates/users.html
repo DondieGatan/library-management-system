@@ -15,11 +15,11 @@
     {% for u in users %}
     <tr>
       <td>{{ u.username }}{% if u.id == session.get('user_id') %} <span class="badge">You</span>{% endif %}</td>
-      <td><span class="badge {{ 'badge-success' if u.role == 'admin' else '' }}">{{ u.role }}</span></td>
+      <td><span class="badge {{ 'badge-success' if u.role in ['admin', 'owner'] else '' }}">{{ u.role }}</span></td>
       <td>{{ u.created_at }}</td>
       <td>
         <div class="actions">
-          {% if u.id != session.get('user_id') %}
+          {% if u.id != session.get('user_id') and u.role != 'owner' %}
           <form method="post" action="{{ url_for('update_user_role', user_id=u.id) }}">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="role" value="{{ 'member' if u.role == 'admin' else 'admin' }}">

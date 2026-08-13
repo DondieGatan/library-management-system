@@ -4,13 +4,27 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>{% block title %}Library Management System{% endblock %}</title>
+<script>
+// Applied before first paint so switching pages never flashes the wrong theme.
+(function () {
+  var saved = localStorage.getItem('theme');
+  if (saved) document.documentElement.setAttribute('data-theme', saved);
+})();
+</script>
+{% block meta %}
+<meta name="description" content="A full-stack library management system with real authentication, role-based access, and live book cover art.">
+<meta property="og:title" content="Library Management System">
+<meta property="og:description" content="Flask + SQLite library app with auth, roles, and live book covers from Open Library.">
+<meta property="og:type" content="website">
+<meta property="og:image" content="{{ url_for('static', filename='img/app-background.jpg', _external=True) }}">
+{% endblock %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22><rect width=%2224%22 height=%2224%22 rx=%226%22 fill=%22%233a2a17%22/><path d=%22M6 6.5c0-.5.4-1 1-1h4.5V18H7c-.6 0-1-.4-1-1z%22 fill=%22%23d1a054%22/><path d=%22M18 6.5c0-.5-.4-1-1-1h-4.5V18H17c.6 0 1-.4 1-1z%22 fill=%22%239c4a3c%22/></svg>">
 </head>
 <body>
 
 <nav class="navbar">
-  <a href="{{ (url_for('dashboard') if current_role == 'admin' else url_for('books')) if current_username else url_for('login') }}" class="brand">
+  <a href="{{ (url_for('dashboard') if current_role in ['admin', 'owner'] else url_for('books')) if current_username else url_for('login') }}" class="brand">
     <svg class="brand-icon" width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
       <path class="brand-icon-left" d="M4 5.5C4 4.67 4.67 4 5.5 4H11.5V20H5.5C4.67 20 4 19.33 4 18.5V5.5Z" fill="currentColor" opacity="0.9"/>
       <path class="brand-icon-right" d="M20 5.5C20 4.67 19.33 4 18.5 4H12.5V20H18.5C19.33 20 20 19.33 20 18.5V5.5Z" fill="currentColor" opacity="0.55"/>
@@ -19,18 +33,23 @@
   </a>
   {% if current_username %}
     <div class="nav-links">
-      {% if current_role == 'admin' %}
+      {% if current_role in ['admin', 'owner'] %}
       <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' }}">Dashboard</a>
       {% endif %}
       <a href="{{ url_for('books') }}" class="{{ 'active' if request.endpoint in ['books','add_book','edit_book','book_detail'] }}">Books</a>
-      {% if current_role == 'admin' %}
+      {% if current_role in ['admin', 'owner'] %}
       <a href="{{ url_for('members') }}" class="{{ 'active' if request.endpoint in ['members','add_member','edit_member'] }}">Members</a>
       <a href="{{ url_for('loans') }}" class="{{ 'active' if request.endpoint == 'loans' }}">Loans</a>
+      {% endif %}
+      {% if current_role == 'owner' %}
       <a href="{{ url_for('users') }}" class="{{ 'active' if request.endpoint in ['users','update_user_role'] }}">Users</a>
       {% endif %}
     </div>
     <div class="nav-user">
-      <span class="nav-username">{{ current_username }}{% if current_role == 'admin' %}<span class="role-badge">Admin</span>{% endif %}</span>
+      <button type="button" class="theme-toggle" onclick="toggleTheme()" aria-label="Toggle dark/light theme" title="Toggle theme">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9z"/></svg>
+      </button>
+      <span class="nav-username">{{ current_username }}{% if current_role == 'owner' %}<span class="role-badge role-badge-owner">Owner</span>{% elif current_role == 'admin' %}<span class="role-badge">Admin</span>{% endif %}</span>
       <form method="post" action="{{ url_for('logout') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-ghost btn-small">Log Out</button>
@@ -58,6 +77,16 @@
 </main>
 
 <footer class="footer">Library Management System &copy; 2026 &mdash; Dondie Godwin Gatan</footer>
+
+<script>
+function toggleTheme() {
+  var root = document.documentElement;
+  var current = root.getAttribute('data-theme') || (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark');
+  var next = current === 'dark' ? 'light' : 'dark';
+  root.setAttribute('data-theme', next);
+  localStorage.setItem('theme', next);
+}
+</script>
 
 </body>
 </html>

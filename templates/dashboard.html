@@ -67,7 +67,7 @@
   {% endif %}
 </div>
 
-{% if current_role == 'admin' %}
+{% if current_role in ['admin', 'owner'] %}
 <div class="panel">
   <div class="panel-header">
     <h2>Currently Borrowed</h2>

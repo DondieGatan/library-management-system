@@ -31,12 +31,23 @@ def client(tmp_path, monkeypatch):
 
 
 def register_and_login(client, username='alice', password='password123', promote_admin=False):
+    import database
+    # The first-ever account in a database becomes owner automatically
+    # (see test_first_registered_user_becomes_owner for a direct test of
+    # that). Most other tests don't care about that and just want a plain
+    # member/admin, so burn the "first user" slot on a throwaway account
+    # first to keep register_and_login's normal callers unaffected.
+    if not database.get_all_users():
+        client.post('/register', data={
+            'username': '_seed_owner', 'password': 'SeedOwner123', 'confirm_password': 'SeedOwner123',
+        })
+        client.post('/logout')
+
     client.post('/logout')  # in case a different user is already logged in, so register isn't skipped
     client.post('/register', data={
         'username': username, 'password': password, 'confirm_password': password,
     })
     if promote_admin:
-        import database
         conn = database.get_connection()
         conn.execute("UPDATE users SET role = 'admin' WHERE username = ?", (username,))
         conn.commit()

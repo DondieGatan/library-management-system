@@ -19,7 +19,7 @@
 }
 
 @media (prefers-color-scheme: light) {
-  :root {
+  :root:not([data-theme="dark"]) {
     --bg: #f6ecdb;
     --surface: #fffaf1;
     --surface-2: #f1e3c9;
@@ -32,6 +32,37 @@
     --shadow: 0 14px 30px rgba(90, 63, 24, 0.14);
     --shadow-sm: 0 5px 14px rgba(90, 63, 24, 0.1);
   }
+}
+
+/* Manual toggle wins over the OS preference in both directions. */
+:root[data-theme="light"] {
+  --bg: #f6ecdb;
+  --surface: #fffaf1;
+  --surface-2: #f1e3c9;
+  --border: #ddc7a0;
+  --text: #3a2a17;
+  --text-muted: #83694a;
+  --accent: #b0762b;
+  --accent-2: #8a3a30;
+  --accent-strong: #97621f;
+  --shadow: 0 14px 30px rgba(90, 63, 24, 0.14);
+  --shadow-sm: 0 5px 14px rgba(90, 63, 24, 0.1);
+}
+
+:root[data-theme="dark"] {
+  --bg: #1c140e;
+  --surface: #241a12;
+  --surface-2: #2e2116;
+  --border: #4a3722;
+  --text: #f2e6d3;
+  --text-muted: #b8a184;
+  --accent: #d1a054;
+  --accent-2: #9c4a3c;
+  --accent-strong: #e0b064;
+  --danger: #e0685a;
+  --success: #8ba664;
+  --shadow: 0 14px 32px rgba(15, 9, 4, 0.5);
+  --shadow-sm: 0 5px 16px rgba(15, 9, 4, 0.35);
 }
 
 * { box-sizing: border-box; }
@@ -164,6 +195,23 @@ h1, h2, h3, .brand, .stat-value {
 
 .brand:hover .brand-icon-left, .brand:hover .brand-icon-right { animation-duration: 1s; }
 
+.theme-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+.theme-toggle:hover { color: var(--accent); border-color: var(--accent); transform: rotate(15deg); }
+.theme-toggle svg { width: 17px; height: 17px; }
+
 .nav-links { display: flex; gap: 22px; }
 
 .nav-links a {
@@ -215,6 +263,11 @@ h1, h2, h3, .brand, .stat-value {
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   padding: 2px 7px;
   border-radius: 999px;
+}
+
+.role-badge-owner {
+  background: linear-gradient(135deg, #f2c14e, var(--accent-2));
+  box-shadow: 0 0 0 1px color-mix(in srgb, #f2c14e 50%, transparent);
 }
 
 .header-actions { display: flex; gap: 10px; align-items: center; }
@@ -866,6 +919,8 @@ img.book-cover {
 }
 
 .auth-brand { font-size: 1.15rem; }
+
+.auth-top-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 
 .auth-form-wrap {
   flex: 1;

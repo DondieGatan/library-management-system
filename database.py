@@ -389,6 +389,13 @@ def get_user_by_id(user_id: int) -> Row | None:
 
 def create_user(username: str, password_hash: str, role: str = 'member') -> None:
     conn = get_connection()
+    # The very first account ever registered becomes the owner (head admin)
+    # automatically, so a fresh clone of this app always has someone who can
+    # manage other admins' access -- everyone after that defaults to the
+    # passed-in role (normally 'member').
+    is_first_user = conn.execute('SELECT COUNT(*) AS n FROM users').fetchone()['n'] == 0
+    if is_first_user:
+        role = 'owner'
     conn.execute(
         'INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
         (username, password_hash, role)

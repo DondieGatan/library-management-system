@@ -5,7 +5,7 @@
 <div class="page-header">
   <h1 class="page-title">Books</h1>
   <div class="header-actions">
-    {% if current_role == 'admin' %}
+    {% if current_role in ['admin', 'owner'] %}
     <a href="{{ url_for('export_books_csv') }}" class="btn btn-ghost">Export CSV</a>
     <a href="{{ url_for('add_book') }}" class="btn btn-primary">+ Add Book</a>
     {% endif %}
@@ -113,7 +113,7 @@ function highlightSuggestion(items, index) {
       <span class="book-card-author">{{ book.author }}</span>
       <span class="badge book-card-category">{{ book.category }}</span>
     </div>
-    {% if current_role == 'admin' %}
+    {% if current_role in ['admin', 'owner'] %}
     <div class="book-card-actions">
       <a href="{{ url_for('edit_book', book_id=book.id) }}" class="icon-btn">Edit</a>
       <form method="post" action="{{ url_for('delete_book', book_id=book.id) }}" onsubmit="return confirm('Delete this book?');">

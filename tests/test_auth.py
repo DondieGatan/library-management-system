@@ -8,10 +8,26 @@ def test_register_and_login_succeeds(client):
 
 
 def test_new_signups_default_to_member_role(client):
+    # the *first* account in a fresh db becomes owner (see the dedicated
+    # bootstrap test below), so register someone else first to get a
+    # normal, non-first signup here.
+    register_and_login(client, username='first_account')
     register_and_login(client, username='bob')
     import database
     user = database.get_user_by_username('bob')
     assert user['role'] == 'member'
+
+
+def test_first_registered_user_becomes_owner(client):
+    # register directly, bypassing register_and_login's auto-seeded
+    # throwaway owner -- this test is specifically about who lands in
+    # that first-user slot on a truly fresh database.
+    client.post('/register', data={
+        'username': 'founder', 'password': 'password123', 'confirm_password': 'password123',
+    })
+    import database
+    user = database.get_user_by_username('founder')
+    assert user['role'] == 'owner'
 
 
 def test_login_rejects_wrong_password(client):

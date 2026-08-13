@@ -51,8 +51,22 @@ def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
 def admin_required(view: Callable[..., Any]) -> Callable[..., Any]:
     @wraps(view)
     def wrapped(*args, **kwargs):
-        if session.get('role') != 'admin':
+        if session.get('role') not in ('admin', 'owner'):
             flash('That action requires an admin account.', 'error')
+            return redirect(request.referrer or url_for('books'))
+        return view(*args, **kwargs)
+    return wrapped
+
+
+def owner_required(view: Callable[..., Any]) -> Callable[..., Any]:
+    """Stricter than admin_required -- an admin promoted by the owner could
+    otherwise turn around and demote the owner (or any other admin), which
+    is exactly the kind of access a regular admin shouldn't be able to
+    revoke. Only the owner can change anyone's role."""
+    @wraps(view)
+    def wrapped(*args, **kwargs):
+        if session.get('role') != 'owner':
+            flash('Only the owner account can manage user roles.', 'error')
             return redirect(request.referrer or url_for('books'))
         return view(*args, **kwargs)
     return wrapped
@@ -60,7 +74,7 @@ def admin_required(view: Callable[..., Any]) -> Callable[..., Any]:
 
 def home_url() -> str:
     """Members have no Dashboard, so their landing page is Books instead."""
-    return url_for('dashboard') if session.get('role') == 'admin' else url_for('books')
+    return url_for('dashboard') if session.get('role') != 'member' else url_for('books')
 
 
 def _resolve_missing_covers(
@@ -161,7 +175,7 @@ def logout():
 @app.route('/')
 @login_required
 def dashboard():
-    if session.get('role') != 'admin':
+    if session.get('role') not in ('admin', 'owner'):
         return redirect(url_for('books'))
     stats = db.get_stats()
     recent_loans = with_loan_covers(db.get_loans(status='borrowed')[:5])
@@ -215,7 +229,7 @@ def book_detail(book_id):
         description = covers.resolve_description(book.get('isbn'), book['title'], book['author'])
         db.update_book_description(book_id, description or '')
         book['description'] = description or ''
-    loan_history = db.get_book_loans(book_id) if session.get('role') == 'admin' else []
+    loan_history = db.get_book_loans(book_id) if session.get('role') in ('admin', 'owner') else []
     return render_template('book_detail.html', book=book, loan_history=loan_history)
 
 
@@ -358,17 +372,21 @@ def delete_member(member_id):
 
 @app.route('/users')
 @login_required
-@admin_required
+@owner_required
 def users():
     return render_template('users.html', users=db.get_all_users())
 
 
 @app.route('/users/<int:user_id>/role', methods=['POST'])
 @login_required
-@admin_required
+@owner_required
 def update_user_role(user_id):
     if user_id == session.get('user_id'):
         flash("You can't change your own role.", 'error')
+        return redirect(url_for('users'))
+    target = db.get_user_by_id(user_id)
+    if target and target['role'] == 'owner':
+        flash("The owner's role can't be changed.", 'error')
         return redirect(url_for('users'))
     new_role = 'admin' if request.form.get('role') == 'admin' else 'member'
     db.update_user_role(user_id, new_role)

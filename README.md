@@ -9,9 +9,11 @@ Flask, SQLite, and server-rendered HTML/CSS with no frontend framework.
 
 - **Authentication** — register/login/logout with hashed passwords
   (Werkzeug), session-based auth, and CSRF protection on every form
-- **Roles** — `admin` (full access: manage books, members, and loans) vs.
-  `member` (browse and search the catalog only); enforced server-side on
-  every route, not just hidden in the UI
+- **Roles** — three tiers, enforced server-side on every route (not just
+  hidden in the UI): `owner` (everything an admin can do, plus the only
+  account that can promote/demote other users -- so a regular admin can
+  never revoke the owner's own access), `admin` (manage books, members,
+  and loans), `member` (browse and search the catalog only)
 - **Books** — a cover-art gallery grid with search-as-you-type suggestions
   (title/author, shown with cover thumbnails), pagination, CSV export, and
   a detail page per book showing its full info, loan history (admins), and
@@ -53,13 +55,11 @@ python app.py
 ```
 
 Then open `http://localhost:5050`. The SQLite database (`library.db`) is
-created automatically on first run. The first person to register on a
-fresh database... doesn't get admin automatically — promote an account to
-admin directly in the database if you need one:
-
-```bash
-python -c "import database as db; db.get_connection().execute(\"UPDATE users SET role='admin' WHERE username='YOUR_USERNAME'\").connection.commit()"
-```
+created automatically on first run, and **the first account you register
+becomes the owner** automatically. From there, sign in as the owner and
+use the Users page to promote anyone else to admin -- no manual database
+editing needed for normal use. (If you ever do need to set a role by hand:
+`python -c "import database as db; db.get_connection().execute(\"UPDATE users SET role='admin' WHERE username='YOUR_USERNAME'\").connection.commit()"`)
 
 ## Tests
 
