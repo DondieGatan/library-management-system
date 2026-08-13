@@ -48,6 +48,10 @@ a { color: inherit; }
 
 .nav-links a.active, .nav-links a:hover { color: var(--accent); }
 
+.nav-user { display: flex; align-items: center; gap: 12px; }
+.nav-username { font-size: 0.88rem; color: var(--text-muted); }
+.nav-user form { margin: 0; }
+
 .container { max-width: 980px; margin: 0 auto; padding: 32px 20px 60px; }
 
 .page-title { margin: 0 0 20px; font-size: 1.5rem; }

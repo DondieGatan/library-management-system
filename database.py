@@ -43,6 +43,13 @@ def init_db():
             return_date TEXT,
             status      TEXT NOT NULL DEFAULT 'borrowed' CHECK (status IN ('borrowed', 'returned'))
         );
+
+        CREATE TABLE IF NOT EXISTS users (
+            id            INTEGER PRIMARY KEY AUTOINCREMENT,
+            username      TEXT NOT NULL UNIQUE,
+            password_hash TEXT NOT NULL,
+            created_at    TEXT NOT NULL DEFAULT (date('now'))
+        );
     ''')
     conn.commit()
     conn.close()
@@ -228,3 +235,31 @@ def get_stats():
         'borrowed_now': borrowed_now,
         'overdue_now': overdue_now,
     }
+
+
+# --------------------------------------------------------------------------
+# Users (authentication)
+# --------------------------------------------------------------------------
+
+def get_user_by_username(username):
+    conn = get_connection()
+    row = conn.execute('SELECT * FROM users WHERE username = ?', (username,)).fetchone()
+    conn.close()
+    return row
+
+
+def get_user_by_id(user_id):
+    conn = get_connection()
+    row = conn.execute('SELECT * FROM users WHERE id = ?', (user_id,)).fetchone()
+    conn.close()
+    return row
+
+
+def create_user(username, password_hash):
+    conn = get_connection()
+    conn.execute(
+        'INSERT INTO users (username, password_hash) VALUES (?, ?)',
+        (username, password_hash)
+    )
+    conn.commit()
+    conn.close()

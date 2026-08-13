@@ -9,13 +9,26 @@
 <body>
 
 <nav class="navbar">
-  <a href="{{ url_for('dashboard') }}" class="brand">📚 LibrarySys</a>
-  <div class="nav-links">
-    <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' }}">Dashboard</a>
-    <a href="{{ url_for('books') }}" class="{{ 'active' if request.endpoint in ['books','add_book','edit_book'] }}">Books</a>
-    <a href="{{ url_for('members') }}" class="{{ 'active' if request.endpoint in ['members','add_member','edit_member'] }}">Members</a>
-    <a href="{{ url_for('loans') }}" class="{{ 'active' if request.endpoint == 'loans' }}">Loans</a>
-  </div>
+  <a href="{{ url_for('dashboard') if current_username else url_for('login') }}" class="brand">📚 LibrarySys</a>
+  {% if current_username %}
+    <div class="nav-links">
+      <a href="{{ url_for('dashboard') }}" class="{{ 'active' if request.endpoint == 'dashboard' }}">Dashboard</a>
+      <a href="{{ url_for('books') }}" class="{{ 'active' if request.endpoint in ['books','add_book','edit_book'] }}">Books</a>
+      <a href="{{ url_for('members') }}" class="{{ 'active' if request.endpoint in ['members','add_member','edit_member'] }}">Members</a>
+      <a href="{{ url_for('loans') }}" class="{{ 'active' if request.endpoint == 'loans' }}">Loans</a>
+    </div>
+    <div class="nav-user">
+      <span class="nav-username">{{ current_username }}</span>
+      <form method="post" action="{{ url_for('logout') }}">
+        <button type="submit" class="btn btn-ghost btn-small">Log Out</button>
+      </form>
+    </div>
+  {% else %}
+    <div class="nav-links">
+      <a href="{{ url_for('login') }}" class="{{ 'active' if request.endpoint == 'login' }}">Log In</a>
+      <a href="{{ url_for('register') }}" class="{{ 'active' if request.endpoint == 'register' }}">Register</a>
+    </div>
+  {% endif %}
 </nav>
 
 <main class="container">

@@ -1,0 +1,21 @@
+{% extends 'base.html' %}
+{% block title %}Log In — Library Management System{% endblock %}
+{% block content %}
+
+<h1 class="page-title">Log In</h1>
+
+<form class="form-panel" method="post" style="max-width: 360px;">
+  <label>Username
+    <input type="text" name="username" required autofocus>
+  </label>
+  <label>Password
+    <input type="password" name="password" required>
+  </label>
+
+  <div class="form-actions">
+    <button type="submit" class="btn btn-primary">Log In</button>
+    <a href="{{ url_for('register') }}" class="btn btn-ghost">Create Account</a>
+  </div>
+</form>
+
+{% endblock %}
