@@ -97,6 +97,32 @@ h1, h2, h3, .brand, .stat-value {
 .navbar .nav-user { justify-self: end; }
 .navbar .brand { justify-self: start; }
 
+/* Enough admin nav links (Dashboard/Books/Members/Loans/Users) that the
+   3-column grid overflows the viewport on phones -- stack brand+user on
+   one row and let the links scroll horizontally on their own row instead
+   of forcing the whole page to scroll sideways. */
+@media (max-width: 900px) {
+  .navbar {
+    grid-template-columns: 1fr auto;
+    grid-template-rows: auto auto;
+    grid-template-areas: "brand user" "links links";
+    row-gap: 10px;
+    padding: 14px 20px;
+  }
+  .navbar .brand { grid-area: brand; justify-self: start; font-size: 0.85rem; gap: 6px; }
+  .navbar .nav-user { grid-area: user; justify-self: end; gap: 8px; }
+  .navbar .nav-username { font-size: 0.75rem; padding: 4px 8px; }
+
+  .navbar .nav-links {
+    grid-area: links;
+    justify-self: stretch;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: thin;
+    padding-bottom: 2px;
+  }
+}
+
 .brand {
   display: inline-flex;
   align-items: center;
