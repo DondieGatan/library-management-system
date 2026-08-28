@@ -74,3 +74,40 @@ def test_logout_clears_session(client):
     client.post('/logout')
     resp = client.get('/books', follow_redirects=True)
     assert b'Please log in to continue' in resp.data
+
+
+def test_deleted_user_session_is_rejected(client):
+    # A still-valid session cookie shouldn't keep working once the
+    # underlying user row is gone -- the app must re-check the DB per
+    # request rather than trusting cached session data.
+    register_and_login(client, username='heidi')
+
+    import database
+    conn = database.get_connection()
+    conn.execute("DELETE FROM users WHERE username = 'heidi'")
+    conn.commit()
+    conn.close()
+
+    resp = client.get('/books', follow_redirects=True)
+    assert b'Please log in to continue' in resp.data or b'no longer available' in resp.data
+
+    # and the nav bar should no longer show the deleted user as logged in
+    assert b'heidi' not in resp.data
+
+
+def test_demoted_admin_loses_access_on_next_request(client):
+    # Promoting/demoting a role should take effect immediately, not only
+    # after the affected user logs out and back in.
+    register_and_login(client, username='ivan', promote_admin=True)
+
+    resp = client.get('/books/add')
+    assert resp.status_code == 200
+
+    import database
+    conn = database.get_connection()
+    conn.execute("UPDATE users SET role = 'member' WHERE username = 'ivan'")
+    conn.commit()
+    conn.close()
+
+    resp = client.get('/books/add', follow_redirects=True)
+    assert b'requires an admin account' in resp.data

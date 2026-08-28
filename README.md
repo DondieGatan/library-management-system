@@ -5,6 +5,12 @@ borrow/return workflow, with real authentication, role-based access
 control, and book cover art and synopses pulled live from Open Library —
 Flask, SQLite, and server-rendered HTML/CSS with no frontend framework.
 
+**Live demo:** https://library-management-system-s4ys.onrender.com
+(seeded account: `owner` / `password123`, or register your own — the
+first account is always made owner automatically). Hosted on Render's
+free tier, so the first request after a period of inactivity can take
+up to a minute to wake the instance.
+
 ## Features
 
 - **Authentication** — register/login/logout with hashed passwords

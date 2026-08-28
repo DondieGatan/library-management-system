@@ -44,6 +44,17 @@ def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
         if 'user_id' not in session:
             flash('Please log in to continue.', 'error')
             return redirect(url_for('login', next=request.path))
+        # Re-check the user against the database on every request rather than
+        # trusting the cookie's cached username/role -- otherwise a deleted
+        # account keeps working until the browser session expires, and a
+        # demoted admin/owner keeps their old privileges until they log out.
+        user = db.get_user_by_id(session['user_id'])
+        if user is None:
+            session.clear()
+            flash('Your account is no longer available. Please log in again.', 'error')
+            return redirect(url_for('login', next=request.path))
+        session['username'] = user['username']
+        session['role'] = user['role']
         return view(*args, **kwargs)
     return wrapped
 
