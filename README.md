@@ -1,5 +1,7 @@
 # Library Management System
 
+[![CI](https://github.com/DondieGatan/library-management-system/actions/workflows/ci.yml/badge.svg)](https://github.com/DondieGatan/library-management-system/actions/workflows/ci.yml)
+
 A full CRUD web app for managing a library's books, members, and
 borrow/return workflow, with real authentication, role-based access
 control, and book cover art and synopses pulled live from Open Library —
