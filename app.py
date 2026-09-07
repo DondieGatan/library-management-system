@@ -2,12 +2,14 @@ import csv
 import io
 import logging
 import os
+import re
 import secrets
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 from functools import wraps
 from typing import Any, Callable
 from dotenv import load_dotenv
+import requests
 from flask import Flask, render_template, request, redirect, url_for, flash, session, Response
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
@@ -17,6 +19,8 @@ import database as db
 import covers
 
 load_dotenv()
+
+EMAIL_RE = re.compile(r'^[^@\s]+@[^@\s]+\.[^@\s]+$')
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 logger = logging.getLogger('library')
@@ -36,6 +40,38 @@ csrf = CSRFProtect(app)
 limiter = Limiter(get_remote_address, app=app, default_limits=[])
 
 db.init_db()
+
+SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
+SENDGRID_FROM = os.environ.get('SENDGRID_FROM')
+RESET_CODE_TTL_MINUTES = 10
+
+
+def send_email(to: str, subject: str, html: str) -> bool:
+    """Send an email via SendGrid's HTTP API. Returns False (and logs a
+    warning instead of raising) when SendGrid isn't configured -- e.g. in
+    local dev without a key set -- so callers can fire-and-forget without
+    every environment needing real email delivery."""
+    if not SENDGRID_API_KEY or not SENDGRID_FROM:
+        logger.warning('SendGrid is not configured; skipping email to %s', to)
+        return False
+    response = requests.post(
+        'https://api.sendgrid.com/v3/mail/send',
+        headers={'Authorization': f'Bearer {SENDGRID_API_KEY}'},
+        json={
+            'personalizations': [{'to': [{'email': to}]}],
+            'from': {'email': SENDGRID_FROM},
+            'subject': subject,
+            'content': [{'type': 'text/html', 'value': html}],
+        },
+        timeout=10,
+    )
+    if not response.ok:
+        logger.error('SendGrid email to %s failed: %s %s', to, response.status_code, response.text)
+    return response.ok
+
+
+def generate_reset_code() -> str:
+    return f'{secrets.randbelow(1_000_000):06d}'
 
 
 def login_required(view: Callable[..., Any]) -> Callable[..., Any]:
@@ -136,19 +172,24 @@ def register():
         return redirect(home_url())
     if request.method == 'POST':
         username = request.form['username'].strip()
+        email = request.form.get('email', '').strip().lower()
         password = request.form['password']
         confirm = request.form.get('confirm_password', '')
 
-        if not username or not password:
-            flash('Username and password are required.', 'error')
+        if not username or not password or not email:
+            flash('Username, email, and password are required.', 'error')
+        elif not EMAIL_RE.match(email):
+            flash('Enter a valid email address.', 'error')
         elif password != confirm:
             flash('Passwords do not match.', 'error')
         elif len(password) < 8:
             flash('Password must be at least 8 characters.', 'error')
         elif db.get_user_by_username(username):
             flash('That username is already taken.', 'error')
+        elif db.get_user_by_email(email):
+            flash('An account with that email already exists.', 'error')
         else:
-            db.create_user(username, generate_password_hash(password))
+            db.create_user(username, generate_password_hash(password), email=email)
             flash('Account created — please log in.', 'success')
             return redirect(url_for('login'))
     return render_template('register.html')
@@ -181,6 +222,90 @@ def logout():
     session.clear()
     flash('Logged out.', 'success')
     return redirect(url_for('login'))
+
+
+@app.route('/forgot-password', methods=['GET', 'POST'])
+@limiter.limit('5 per minute', methods=['POST'])
+def forgot_password():
+    if 'user_id' in session:
+        return redirect(home_url())
+    if request.method == 'POST':
+        email = request.form.get('email', '').strip().lower()
+        user = db.get_user_by_email(email)
+        if user:
+            code = generate_reset_code()
+            db.create_reset_code(email, code, ttl_minutes=RESET_CODE_TTL_MINUTES)
+            send_email(
+                email,
+                'Reset your Library Management System password',
+                f'<p>Your password reset code is:</p><h2>{code}</h2>'
+                f'<p>This code expires in {RESET_CODE_TTL_MINUTES} minutes. '
+                f"If you didn't request this, you can safely ignore this email.</p>",
+            )
+        # Same message whether or not the account exists, so this can't be
+        # used to enumerate which emails are registered.
+        flash('If an account with that email exists, a reset code has been sent.', 'success')
+        return redirect(url_for('verify_reset_code_route', email=email))
+    return render_template('forgot_password.html')
+
+
+@app.route('/verify-reset-code', methods=['GET', 'POST'])
+@limiter.limit('10 per minute', methods=['POST'])
+def verify_reset_code_route():
+    if 'user_id' in session:
+        return redirect(home_url())
+
+    email = request.args.get('email', '') or request.form.get('email', '')
+    if not email:
+        flash('Please start the password reset process again.', 'error')
+        return redirect(url_for('forgot_password'))
+
+    if request.method == 'POST':
+        code = request.form.get('code', '').strip()
+        if not code or len(code) != 6:
+            flash('Please enter the 6-digit code.', 'error')
+        elif db.verify_reset_code(email, code):
+            session['reset_email'] = email
+            flash('Code verified! Set your new password.', 'success')
+            return redirect(url_for('reset_password'))
+        else:
+            flash('Invalid or expired code. Please try again.', 'error')
+    return render_template('verify_reset_code.html', email=email)
+
+
+@app.route('/reset-password', methods=['GET', 'POST'])
+def reset_password():
+    if 'user_id' in session:
+        return redirect(home_url())
+
+    email = session.get('reset_email')
+    if not email:
+        flash('Please verify your code first.', 'error')
+        return redirect(url_for('forgot_password'))
+
+    # Re-checked here (not just at verify-code) because the session flag
+    # above has no expiry of its own -- without this, a browser tab left
+    # open past the code's TTL could still set a new password with no
+    # live verification at all.
+    if not db.reset_token_still_valid(email):
+        session.pop('reset_email', None)
+        flash('Your reset code has expired. Please start again.', 'error')
+        return redirect(url_for('forgot_password'))
+
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        confirm = request.form.get('confirm_password', '')
+
+        if not password or len(password) < 8:
+            flash('Password must be at least 8 characters.', 'error')
+        elif password != confirm:
+            flash('Passwords do not match.', 'error')
+        else:
+            db.reset_user_password(email, generate_password_hash(password))
+            session.pop('reset_email', None)
+            flash('Password reset successfully! Please log in with your new password.', 'success')
+            return redirect(url_for('login'))
+    return render_template('reset_password.html')
 
 
 @app.route('/')

@@ -30,7 +30,7 @@ def client(tmp_path, monkeypatch):
         yield c
 
 
-def register_and_login(client, username='alice', password='password123', promote_admin=False):
+def register_and_login(client, username='alice', password='password123', promote_admin=False, email=None):
     import database
     # The first-ever account in a database becomes owner automatically
     # (see test_first_registered_user_becomes_owner for a direct test of
@@ -39,13 +39,15 @@ def register_and_login(client, username='alice', password='password123', promote
     # first to keep register_and_login's normal callers unaffected.
     if not database.get_all_users():
         client.post('/register', data={
-            'username': '_seed_owner', 'password': 'SeedOwner123', 'confirm_password': 'SeedOwner123',
+            'username': '_seed_owner', 'email': '_seed_owner@example.com',
+            'password': 'SeedOwner123', 'confirm_password': 'SeedOwner123',
         })
         client.post('/logout')
 
     client.post('/logout')  # in case a different user is already logged in, so register isn't skipped
     client.post('/register', data={
-        'username': username, 'password': password, 'confirm_password': password,
+        'username': username, 'email': email or f'{username}@example.com',
+        'password': password, 'confirm_password': password,
     })
     if promote_admin:
         conn = database.get_connection()

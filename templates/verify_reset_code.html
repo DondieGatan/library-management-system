@@ -1,0 +1,22 @@
+{% extends 'auth_base.html' %}
+{% block title %}Verify Code — Library Management System{% endblock %}
+{% block content %}
+
+<h1 class="page-title">Enter Verification Code</h1>
+<p class="auth-sub">We sent a 6-digit code to <strong>{{ email }}</strong>.</p>
+
+<form class="auth-form" method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="email" value="{{ email }}">
+  <label>6-digit code
+    <input type="text" name="code" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" required autofocus>
+  </label>
+
+  <button type="submit" class="btn btn-primary auth-submit">Verify Code</button>
+  <p class="auth-switch">
+    Didn't get a code?
+    <a href="{{ url_for('forgot_password') }}">Resend code</a>
+  </p>
+</form>
+
+{% endblock %}

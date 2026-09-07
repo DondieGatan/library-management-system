@@ -1,6 +1,6 @@
 import sqlite3
 import os
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 
 DEFAULT_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'library.db')
 LOAN_PERIOD_DAYS = 14
@@ -79,6 +79,26 @@ def init_db() -> None:
         conn.execute('ALTER TABLE books ADD COLUMN description TEXT')
     except sqlite3.OperationalError:
         pass
+    # Migration for tables created before password reset existed. Nullable
+    # (not UNIQUE at the column level) so accounts registered before this
+    # shipped -- which have no email on file at all -- don't collide with
+    # each other on NULL; real uniqueness for accounts that do have one is
+    # enforced by the partial unique index created below instead.
+    try:
+        conn.execute('ALTER TABLE users ADD COLUMN email TEXT')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute('ALTER TABLE users ADD COLUMN reset_token TEXT')
+    except sqlite3.OperationalError:
+        pass
+    try:
+        conn.execute('ALTER TABLE users ADD COLUMN reset_token_expiry TIMESTAMP')
+    except sqlite3.OperationalError:
+        pass
+    conn.execute(
+        'CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email) WHERE email IS NOT NULL'
+    )
     conn.commit()
     conn.close()
 
@@ -387,7 +407,14 @@ def get_user_by_id(user_id: int) -> Row | None:
     return row
 
 
-def create_user(username: str, password_hash: str, role: str = 'member') -> None:
+def get_user_by_email(email: str) -> Row | None:
+    conn = get_connection()
+    row = conn.execute('SELECT * FROM users WHERE email = ?', (email.lower().strip(),)).fetchone()
+    conn.close()
+    return row
+
+
+def create_user(username: str, password_hash: str, role: str = 'member', email: str | None = None) -> None:
     conn = get_connection()
     # The very first account ever registered becomes the owner (head admin)
     # automatically, so a fresh clone of this app always has someone who can
@@ -397,8 +424,65 @@ def create_user(username: str, password_hash: str, role: str = 'member') -> None
     if is_first_user:
         role = 'owner'
     conn.execute(
-        'INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)',
-        (username, password_hash, role)
+        'INSERT INTO users (username, password_hash, role, email) VALUES (?, ?, ?, ?)',
+        (username, password_hash, role, email.lower().strip() if email else None)
+    )
+    conn.commit()
+    conn.close()
+
+
+# --------------------------------------------------------------------------
+# Password reset
+# --------------------------------------------------------------------------
+
+def create_reset_code(email: str, code: str, ttl_minutes: int = 10) -> None:
+    conn = get_connection()
+    # Stored as an explicit ISO string rather than a raw datetime object --
+    # sqlite3's implicit datetime adapter is deprecated (as of Python 3.12)
+    # and this column is read back as a plain string anyway (no
+    # detect_types configured on this connection).
+    expiry = (datetime.now() + timedelta(minutes=ttl_minutes)).isoformat()
+    conn.execute(
+        'UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE email = ?',
+        (code, expiry, email.lower().strip())
+    )
+    conn.commit()
+    conn.close()
+
+
+def verify_reset_code(email: str, code: str) -> bool:
+    user = get_user_by_email(email)
+    if not user or not user['reset_token'] or not user['reset_token_expiry']:
+        return False
+    expiry = user['reset_token_expiry']
+    if isinstance(expiry, str):
+        expiry = datetime.fromisoformat(expiry)
+    return user['reset_token'] == code.strip() and expiry >= datetime.now()
+
+
+def reset_token_still_valid(email: str) -> bool:
+    """Whether the reset window opened by a prior successful
+    verify_reset_code() call for this email hasn't expired yet. The
+    /reset-password route only gates on a Flask session flag with no
+    expiry of its own, so without this second, time-based check at the
+    point the password actually changes, a browser tab left open past the
+    code's TTL could still set a new password with no live verification
+    at all -- the same gap found and fixed in the sibling Smart Resume
+    Analyser app."""
+    user = get_user_by_email(email)
+    if not user or not user['reset_token'] or not user['reset_token_expiry']:
+        return False
+    expiry = user['reset_token_expiry']
+    if isinstance(expiry, str):
+        expiry = datetime.fromisoformat(expiry)
+    return expiry >= datetime.now()
+
+
+def reset_user_password(email: str, new_password_hash: str) -> None:
+    conn = get_connection()
+    conn.execute(
+        'UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expiry = NULL WHERE email = ?',
+        (new_password_hash, email.lower().strip())
     )
     conn.commit()
     conn.close()

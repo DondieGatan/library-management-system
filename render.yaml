@@ -12,3 +12,7 @@ services:
         generateValue: true
       - key: FLASK_DEBUG
         value: "0"
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: SENDGRID_FROM
+        sync: false

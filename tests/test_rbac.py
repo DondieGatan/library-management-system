@@ -77,7 +77,8 @@ def test_regular_admin_cannot_change_roles_directly(client):
 
 def test_owner_role_cannot_be_changed_even_by_id(client):
     client.post('/register', data={
-        'username': 'realowner', 'password': 'password123', 'confirm_password': 'password123',
+        'username': 'realowner', 'email': 'realowner@example.com',
+        'password': 'password123', 'confirm_password': 'password123',
     })
     client.post('/login', data={'username': 'realowner', 'password': 'password123'})
 
@@ -92,7 +93,8 @@ def test_owner_role_cannot_be_changed_even_by_id(client):
 
 def test_owner_can_promote_member_to_admin(client):
     client.post('/register', data={
-        'username': 'owner5', 'password': 'password123', 'confirm_password': 'password123',
+        'username': 'owner5', 'email': 'owner5@example.com',
+        'password': 'password123', 'confirm_password': 'password123',
     })
     client.post('/login', data={'username': 'owner5', 'password': 'password123'})
     register_and_login(client, username='plainmember')

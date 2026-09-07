@@ -43,9 +43,12 @@ def main():
         return
 
     # First user becomes owner automatically (see database.create_user).
-    db.create_user("owner", generate_password_hash(DEMO_PASSWORD))
-    db.create_user("admin", generate_password_hash(DEMO_PASSWORD), role="admin")
-    db.create_user("member", generate_password_hash(DEMO_PASSWORD), role="member")
+    # Demo emails aren't real inboxes, so a live "forgot password" attempt
+    # against one of these accounts will generate a code but nobody will
+    # ever receive it -- that's expected for a seeded demo account.
+    db.create_user("owner", generate_password_hash(DEMO_PASSWORD), email="owner@library.demo")
+    db.create_user("admin", generate_password_hash(DEMO_PASSWORD), role="admin", email="admin@library.demo")
+    db.create_user("member", generate_password_hash(DEMO_PASSWORD), role="member", email="member@library.demo")
 
     for title, author, isbn, category, copies in BOOKS:
         db.add_book(title, author, isbn, category, copies)
