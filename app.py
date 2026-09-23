@@ -41,6 +41,14 @@ limiter = Limiter(get_remote_address, app=app, default_limits=[])
 
 db.init_db()
 
+
+@app.route('/health')
+def health():
+    """Unauthenticated — used by uptime monitoring to keep the free-tier
+    instance from spinning down between real requests."""
+    return {'status': 'ok'}, 200
+
+
 SENDGRID_API_KEY = os.environ.get('SENDGRID_API_KEY')
 SENDGRID_FROM = os.environ.get('SENDGRID_FROM')
 RESET_CODE_TTL_MINUTES = 10
