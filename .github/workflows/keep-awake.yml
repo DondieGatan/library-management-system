@@ -1,0 +1,19 @@
+name: Keep the live app awake
+
+# Render's free plan puts a service to sleep after about 15 minutes without traffic, and the next
+# visitor waits ~40 seconds for it to wake. A request every 10 minutes keeps it running.
+# (GitHub may delay a scheduled run by a few minutes, and pauses scheduled workflows in a repository
+# that has had no commits for 60 days; pushing any commit, or running this workflow by hand, restarts it.)
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Request the health endpoint
+        run: curl -fsS --max-time 60 --retry 3 --retry-delay 15 https://library-management-system-s4ys.onrender.com/health
